@@ -4,6 +4,7 @@ import os
 from time import ctime
 import sys
 sys.path.append('c:/code/general')
+from NCHGeneral import Use, Save, fewSpreadsheets
 from NCHGeneral import *
 import warnings
 # warnings.simplefilter('ignore', 'FutureWarning')
@@ -12,7 +13,7 @@ global parser
 global InputFeather
 parser = lambda date: pd.datetime.strptime(date, '%d%b%Y')
 
-os.chdir('c:/AdvAnalytics/CCSI/BaselineUpdated')
+os.chdir('c:/AdvAnalytics/OCM/CCSI/BaselineUpdated')
 
 ############################################
 ### General functions to read data files ###
@@ -565,9 +566,165 @@ def ip2PowerBI(dfip, dfepi):
     dfdrg.drop_duplicates(inplace=True)
     dfip = pd.merge(dfip, dfdrg, on='DRG', how='left')
     dfip['MonthsFromEpiStart'] = ((dfip.FromDate - dfip.EpiStart) / np.timedelta64(1, 'M')).astype('int')
-    print(dfip[['MonthsFromEpiStart', 'FromDate', 'EpiStart']].head())
     Save(dfip, Output + '/dfip4PowerBI')
     return
+
+
+def combinePartB(dfop, dfphy, dfdme, dfepi):
+    dfop['Specialty'] = 'A0'
+    dfop['ServiceType'] = '#'
+    dfop['ClinicalTrialNum'] = -1
+    xw = Use('c:/AdvAnalytics/Reference/code_ServicePlace')
+    dfphy = pd.merge(dfphy, xw, on='ServicePlace', how='left')
+    dfdme = pd.merge(dfdme, xw, on='ServicePlace', how='left')
+    dfphy.ServicePlace_lbl.fillna('Unknown', inplace=True)
+    dfdme.ServicePlace_lbl.fillna('Unknown', inplace=True)
+    dfphy['RevCode'] = 'N/A'
+    dfdme['RevCode'] = 'N/A'
+    dfop['LineDx'] = dfop.Dx1
+    xw = Use('c:/AdvAnalytics/Reference/code_FacilityType')
+    dfop = pd.merge(dfop, xw, on='FacilityType', how='left')
+    dfop.rename(columns={'AttendingNPI': 'NPI',
+                         'RevCodeDate': 'LineFromDate',
+                         'FacilityType_lbl': 'ServicePlace_lbl',
+                         'Units': 'Services'}, inplace=True)
+    dfop['LineThruDate'] = dfop.LineFromDate
+    dfop['TaxID'] = dfop.CCN
+
+    xw = Use('c:/AdvAnalytics/Reference/xw_HCPCS2NDC')
+    xw.columns = ['NDC', 'CPT']
+    dfphy = pd.merge(dfphy, xw, on='CPT', how='left')
+    dfphy = dfphy[['BeneSK', 'FromDate', 'ThruDate', 'NPI', 'TaxID', 'Specialty', 'ServicePlace_lbl', 'Services',
+                   'ServiceType', 'LineFromDate', 'LineThruDate', 'CPT', 'CPTMod', 'CPTMod2', 'BETOS',
+                   'RevCode', 'LinePaid', 'Paid', 'LineDx', 'Dx1', 'Dx2', 'ClinicalTrialNum', 'EpiNum', 'NDC']]
+    dfop = dfop[['BeneSK', 'FromDate', 'ThruDate', 'NPI', 'TaxID', 'Specialty', 'ServicePlace_lbl', 'Services',
+                 'ServiceType', 'LineFromDate', 'LineThruDate', 'CPT', 'CPTMod', 'CPTMod2', 'BETOS',
+                 'RevCode', 'LinePaid', 'Paid', 'LineDx', 'Dx1', 'Dx2', 'ClinicalTrialNum', 'EpiNum', 'NDC']]
+    dfdme = dfdme[['BeneSK', 'FromDate', 'ThruDate', 'NPI', 'TaxID', 'Specialty', 'ServicePlace_lbl', 'Services',
+                   'ServiceType', 'LineFromDate', 'LineThruDate', 'CPT', 'CPTMod', 'CPTMod2', 'BETOS',
+                   'RevCode', 'LinePaid', 'Paid', 'LineDx', 'Dx1', 'Dx2', 'ClinicalTrialNum', 'EpiNum', 'NDC']]
+    dfPartB = pd.concat([dfphy, dfop, dfdme])
+    dfPartB['TaxID'] = dfPartB.TaxID.apply(lambda x: str(x))
+    dfe = dfepi[['EpiNum', 'PatientName', 'Sex', 'Age', 'DeathDate', 'EpiStart', 'EpiEnd', 'CancerType',
+                 'RadiationFlag', 'HCCCount', 'PartDChemo', 'PartBTOSPaidImaging', 'PartBTOSPaidLab',
+                 'AttributedPhysicianName', 'ReconciliationEligible']]
+    dfPartB = pd.merge(dfPartB, dfe, on='EpiNum', how='left')
+    dfPartB = dfPartB[dfPartB.ReconciliationEligible>=1]
+    dfPartB = addCCSProc(dfPartB)
+    Save(dfPartB, Working + '/dfPartB')
+    return dfPartB
+
+
+def addCCSProc(df):
+    xw = Use('c:/AdvAnalytics/Reference/xw_CPT2CCSProc')
+    xw.set_index('CPT', inplace=True)
+    dictCCS = xw['CCSProc'].to_dict()
+    df['CCSProc'] = df.CPT.map(dictCCS)
+    return df
+
+
+def writeRadiologyFile(df):
+    df = df[df.CPT.between('7', '8')]
+    df = df[~df.BETOS.between('P', 'P9Z')]
+    xw = Use('c:/AdvAnalytics/Reference/ref_BETOS')
+    df = pd.merge(df, xw, on='BETOS', how='left')
+    xw = Use('c:/AdvAnalytics/Reference/code_CCSProc')
+    df = pd.merge(df, xw, on='CCSProc', how='left')
+    xw = Use('c:/AdvAnalytics/Reference/code_CPT')
+    df = pd.merge(df, xw, on='CPT', how='left')
+    dfG = df.groupby('EpiNum')
+    dfA = dfG.agg({'LinePaid' : {'EpisodeImagingClaims': 'count',
+                                 'EpisodeImagingPaid': 'sum'}})
+    dfA = postAgg(dfA)
+    df = pd.merge(df, dfA, on='EpiNum')
+    xw = Use('c:/AdvAnalytics/Reference/code_HCFASpecialty')
+    df = pd.merge(df, xw, left_on='Specialty', right_on='HCFASpecialty', how='left')
+    for c in ['Level1Group', 'Level2Group', 'Level3Group', 'CCSProc', 'CPTMod2', 'Specialty', 'HCFASpecialty']:
+        del df[c]
+    for c in ['Dx2', 'Dx1']:
+        del df[c]
+    for c in df.columns.tolist():
+        if df[c].dtype == 'object':
+            df[c].fillna('#', inplace=True)
+        elif df[c].dtype == 'datetime64[ns]':
+            df[c].fillna(pd.to_datetime('1/1/1970'), inplace=True)
+        else:
+            df[c].fillna(-99, inplace=True)
+    Save(df, Output + '/dfImagingForPowerBI')
+
+
+def readCoefficients():
+    df = pd.read_excel('c:/AdvAnalytics/OCM/Reference/Input/Model_Coefficients_Revised.xlsx',
+                       sheetname='ParameterEstimates', skiprows=3, header=None,
+                       names=['Variable', 'df', 'Estimate', 'StdError', 'AssocProb', 'Impact'])
+    df = df[['Variable', 'Impact']]
+    df = df[df.Variable != 'Intercept']
+    df['BasePrice'] = np.where(df.Impact > 100, 'Y', 'N')
+    df['AgeSexVariable'] = np.where(df.Variable.str.contains('ale'), "Yes", "No")
+    Save(df, 'c:/AdvAnalytics/OCM/Reference/ref_pricingCoefficients')
+    return df
+
+
+def addBenchmarks2dfepi(df):
+    '''
+    This function adds benchmark rates for certain key variables to dfepi, e.g., the percentage of patients who have
+    radiation therapy during their episodes.  Benchmarks are the mean by detailed cancer type (included the
+    breakouts for breast, prostate, and bladder, but not surgery).  There are lots of fields for which benchmarks are
+    created, including cost and utilization, along with pricing model variables.
+
+    :param df: dfepi, the episode summary dataframe
+    :return: the episode summary dataframe, now limited to episodes that are used in PBP
+    '''
+    df = df[df.ReconciliationEligible > 0.5]
+    df['Female'] = np.where(df.Sex == 2, 1.0, 0.0)
+    df['DiedDuringEpisode'] = np.where(df.DeathDate.between(df.EpiStart, df.EpiEnd), 1.0, 0.0)
+    df['DualEligible'] = np.where(df.DualPartDLIS == 3, 1., 0.)
+    df['HasPartD'] = np.where(df.DualPartDLIS.between(1, 2), 1., 0.)
+    df['HasLIS'] = np.where(df.DualPartDLIS == 2, 1., 0.)
+    df['HadRadOnc'] = np.where(df.RadiationFlag == 1, 1., 0.)
+    df['NumberHCCs'] = df.HCCCount.map({'00': 0.,
+                                        '01': 1.,
+                                        '02': 2.,
+                                        '03': 3.,
+                                        '4-5': 4.33,
+                                        '6+': 6.5})
+    df['CancerTypeDetailed'] = df.CancerType
+    df.loc[(df.CancerType == 'Breast Cancer') & (df.PartDChemo == 0), 'CancerTypeDetailed'] = 'Breast w/ Infused Drugs'
+    df.loc[(df.CancerType == 'Breast Cancer') & (df.PartDChemo == 1), 'CancerTypeDetailed'] = 'Breast, Orals Only'
+    df.loc[(df.CancerType == 'Prostate Cancer') & (
+        df.CastrationSensitiveProstate == 1), 'CancerTypeDetailed'] = 'Prostate, Castration Sensitive'
+    df.loc[(df.CancerType == 'Prostate Cancer') & (
+        df.CastrationSensitiveProstate == 0), 'CancerTypeDetailed'] = 'Prostate, Castration Resistant'
+    df.loc[
+        (df.CancerType == 'Bladder Cancer') & (df.LowRiskBladderFlag == 0), 'CancerTypeDetailed'] = 'Bladder, High Risk'
+    df.loc[
+        (df.CancerType == 'Bladder Cancer') & (df.LowRiskBladderFlag == 1), 'CancerTypeDetailed'] = 'Bladder, Low Risk'
+    df['SurgeryFlag'] = df.SurgeryFlag.astype(np.float16)
+    df['ClinicalTrialFlag'] = df.ClinicalTrialFlag.astype(np.float16)
+    df['CleanPeriodRecentHistory'] = np.where(df.CleanPeriod == 1, 1., 0.)
+    df['CleanPeriodOlderHistory'] = np.where(df.CleanPeriod == 2, 1., 0.)
+    df['CleanPeriodNoHistory'] = np.where(df.CleanPeriod == 2, 1., 0.)
+    listCols = ['Female', 'Age', 'DiedDuringEpisode', 'DualEligible', 'HasPartD', 'HasLIS',
+                'HadRadOnc', 'NumberHCCs', 'CancerTypeDetailed', 'CleanPeriodRecentHistory',
+                'CleanPeriodOlderHistory', 'CleanPeriodNoHistory', 'BaselinePrice',
+                'WinsorizedCost', 'ActualCost', 'PartBTOSPaidProcedures', 'PartBTOSPaidDrugs',
+                'PartBTOSPaidImaging', 'PartBTOSPaidLab', 'PartBTOSPaidOther',
+                'PartBTOSPaidChemo', 'PartBTOSPaidE&M', 'PartBTOSServicesE&M',
+                'PartBTOSPaidRadOnc', 'PartBTOSServicesRadOnc', 'PartBTOSPaidDME',
+                'PartBTOSPaidEmerg', 'IPTotalPaid', 'IPOncologyPaid', 'IPAdmits',
+                'IPOncologyAdmits', 'IPNonOncologyPaid', 'IPNonOncologyAdmits',
+                'SNFPaid', 'SNFLOS', 'HHAPaid', 'HHAVisits', 'HospicePaid', 'HospiceLOS',
+                'PartDChemoPaid', 'PartDChemoScripts', 'PartDNonChemoPaid',
+                'PartDNonChemoScripts', 'DMEDrugPaid', 'DMENonDrugPaid']
+    dfA = df[listCols].groupby('CancerTypeDetailed').agg('mean')
+    dfA.reset_index(inplace=True)
+    Save(dfA, Working + '/dfepiBenchmarks')
+    for c in dfA.columns.tolist():
+        if c != 'CancerTypeDetailed':
+            dfA.rename(columns={c: c + 'Benchmark'}, inplace=True)
+    df = pd.merge(df, dfA, on='CancerTypeDetailed')
+    Save(df, Working + '/dfepi')
+    return df
 
 
 ##################
@@ -627,7 +784,14 @@ dfepi = addTOSCostToEpi(dfepi, dfphy, dfop, dfip, dfsnf, dfhha, dfhs, dfPartD, d
 
 ti=getTaxID(dfphyline)
 dfepi = physicianAttribution(dfphy, ti, dfepi)
+dfepi = addBenchmarks2dfepi(dfepi)
 Save(dfepi, Working + '/dfepi')
+
+dfPartB = combinePartB(dfop, dfphy, dfdme, dfepi)
+
+# Write radiology claims files
+writeRadiologyFile(dfPartB)
 
 # Write files for Power BI
 ip2PowerBI(dfip, dfepi)
+dfcoef = readCoefficients()
