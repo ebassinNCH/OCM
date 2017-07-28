@@ -737,6 +737,8 @@ Save(dfepi, InputFeather + '/dfepi')
 dfdme = readDME()
 Save(dfdme, InputFeather + '/dfdme')
 dfdmeDrugs = dfdme[dfdme.NDC.notnull()]
+dfdmeDrugs.reset_index(inplace=True)
+del dfdmeDrugs['index']
 Save(dfdmeDrugs, InputFeather + '/dfdmeDrugs')
 print('Number of rows in DME drug dataframe after reading: ' + str(len(dfdmeDrugs.index)))
 print('Number of rows in DME file after reading: ' + str(len(dfdme.index)))
