@@ -19,6 +19,11 @@ os.chdir('c:/AdvAnalytics/OCM/CCSI/BaselineUpdated')
 ### General functions to read data files ###
 ############################################
 def createDirectories():
+    '''
+    This function creates the directory structure used for the baseline analysis and sets global variables that are
+    used to determine the subdirectory to which files are written.
+    :return: None
+    '''
     global InputFeather
     InputFeather = os.getcwd() + '/Input'
     try:
@@ -76,6 +81,7 @@ def readDME():
     dfline = RenameVars(df)
     dfdme = pd.merge(dfhead, dfline, how='left')
     dfdme.CPTMod2.fillna(' ', inplace=True)
+    Save(dfdme, InputFeather + '/dfdme')
     return dfdme
 
 
@@ -180,6 +186,7 @@ def readRx():
         xw = xw[['GPI', 'TherapeuticClassLevel1', 'DrugName']]
         xw = pd.merge(xw, xwndc)
         df = pd.merge(df, xw, on='NDC', how='left')
+        Save(dfPartD, InputFeather + '/dfPartD')
     return df
 
 
@@ -188,6 +195,7 @@ def readphy():
     try:
         dfhead = Use(InputFeather + '/dfphyhead')
         print('  Use method applied for dfphyhead')
+        Save(dfphyhead, InputFeather + '/dfphyhead')
     except:
         df = pd.read_csv(fn, delimiter='|',
                          parse_dates=['CLM_FROM_DT', 'CLM_THRU_DT', 'NCH_WKLY_PROC_DT'],
@@ -229,7 +237,9 @@ def readphy():
         xw.loc[xw.BETOS.isin(['P7A']), 'BETOSLevel3Group'] = 'RadOnc'
         xw.loc[xw.BETOS.isin(['T2A', 'T2B', 'T2C', 'T2D']), 'BETOSLevel3Group'] = 'Other'
         dfline = pd.merge(dfline, xw)
+        Save(dfphyline, InputFeather + '/dfphyline')
     dfphy = pd.merge(dfline, dfhead)
+    # Save(dfphy, InputFeather + '/dfphy')
     return dfhead, dfline, dfphy
 
 
@@ -301,6 +311,7 @@ def readOP():
                 dfhead[var] = dfhead[var].apply(lambda x: str(x))
             except:
                 pass
+        Save(dfophead, InputFeather + '/dfophead')
     try:
         dfline = Use(InputFeather + '/dfopline')
         print('  Use method applied for dfopline')
@@ -359,6 +370,7 @@ def readOP():
                  'BETOSLevel3Group'] = 'Drugs'
         dfline.loc[(dfline.RevCode.between('0710', '0719')) & (dfline.BETOSLevel3Group == 'Other'),
                  'BETOSLevel3Group'] = 'Procedures'
+        Save(dfopline, InputFeather + '/dfopline')
     dfop = pd.merge(dfhead, dfline)
     return dfhead, dfline, dfop
 
@@ -565,53 +577,57 @@ def ip2PowerBI(dfip, dfepi):
     dfdrg = dfdrg[['DRG', 'DRG_lbl', 'BaseDRG_lbl']]
     dfdrg.drop_duplicates(inplace=True)
     dfip = pd.merge(dfip, dfdrg, on='DRG', how='left')
+    dfip.FromDate.apply(lambda x: pd.to_datetime('1/1/1970'))
     dfip['MonthsFromEpiStart'] = ((dfip.FromDate - dfip.EpiStart) / np.timedelta64(1, 'M')).astype('int')
     Save(dfip, Output + '/dfip4PowerBI')
     return
 
 
 def combinePartB(dfop, dfphy, dfdme, dfepi):
-    dfop['Specialty'] = 'A0'
-    dfop['ServiceType'] = '#'
-    dfop['ClinicalTrialNum'] = -1
-    xw = Use('c:/AdvAnalytics/Reference/code_ServicePlace')
-    dfphy = pd.merge(dfphy, xw, on='ServicePlace', how='left')
-    dfdme = pd.merge(dfdme, xw, on='ServicePlace', how='left')
-    dfphy.ServicePlace_lbl.fillna('Unknown', inplace=True)
-    dfdme.ServicePlace_lbl.fillna('Unknown', inplace=True)
-    dfphy['RevCode'] = 'N/A'
-    dfdme['RevCode'] = 'N/A'
-    dfop['LineDx'] = dfop.Dx1
-    xw = Use('c:/AdvAnalytics/Reference/code_FacilityType')
-    dfop = pd.merge(dfop, xw, on='FacilityType', how='left')
-    dfop.rename(columns={'AttendingNPI': 'NPI',
-                         'RevCodeDate': 'LineFromDate',
-                         'FacilityType_lbl': 'ServicePlace_lbl',
-                         'Units': 'Services'}, inplace=True)
-    dfop['LineThruDate'] = dfop.LineFromDate
-    dfop['TaxID'] = dfop.CCN
+    try:
+        dfPartB = Use(Working + '/dfPartB')
+    except:
+        dfop['Specialty'] = 'A0'
+        dfop['ServiceType'] = '#'
+        dfop['ClinicalTrialNum'] = -1
+        xw = Use('c:/AdvAnalytics/Reference/code_ServicePlace')
+        dfphy = pd.merge(dfphy, xw, on='ServicePlace', how='left')
+        dfdme = pd.merge(dfdme, xw, on='ServicePlace', how='left')
+        dfphy.ServicePlace_lbl.fillna('Unknown', inplace=True)
+        dfdme.ServicePlace_lbl.fillna('Unknown', inplace=True)
+        dfphy['RevCode'] = 'N/A'
+        dfdme['RevCode'] = 'N/A'
+        dfop['LineDx'] = dfop.Dx1
+        xw = Use('c:/AdvAnalytics/Reference/code_FacilityType')
+        dfop = pd.merge(dfop, xw, on='FacilityType', how='left')
+        dfop.rename(columns={'AttendingNPI': 'NPI',
+                             'RevCodeDate': 'LineFromDate',
+                             'FacilityType_lbl': 'ServicePlace_lbl',
+                             'Units': 'Services'}, inplace=True)
+        dfop['LineThruDate'] = dfop.LineFromDate
+        dfop['TaxID'] = dfop.CCN
 
-    xw = Use('c:/AdvAnalytics/Reference/xw_HCPCS2NDC')
-    xw.columns = ['NDC', 'CPT']
-    dfphy = pd.merge(dfphy, xw, on='CPT', how='left')
-    dfphy = dfphy[['BeneSK', 'FromDate', 'ThruDate', 'NPI', 'TaxID', 'Specialty', 'ServicePlace_lbl', 'Services',
-                   'ServiceType', 'LineFromDate', 'LineThruDate', 'CPT', 'CPTMod', 'CPTMod2', 'BETOS',
-                   'RevCode', 'LinePaid', 'Paid', 'LineDx', 'Dx1', 'Dx2', 'ClinicalTrialNum', 'EpiNum', 'NDC']]
-    dfop = dfop[['BeneSK', 'FromDate', 'ThruDate', 'NPI', 'TaxID', 'Specialty', 'ServicePlace_lbl', 'Services',
-                 'ServiceType', 'LineFromDate', 'LineThruDate', 'CPT', 'CPTMod', 'CPTMod2', 'BETOS',
-                 'RevCode', 'LinePaid', 'Paid', 'LineDx', 'Dx1', 'Dx2', 'ClinicalTrialNum', 'EpiNum', 'NDC']]
-    dfdme = dfdme[['BeneSK', 'FromDate', 'ThruDate', 'NPI', 'TaxID', 'Specialty', 'ServicePlace_lbl', 'Services',
-                   'ServiceType', 'LineFromDate', 'LineThruDate', 'CPT', 'CPTMod', 'CPTMod2', 'BETOS',
-                   'RevCode', 'LinePaid', 'Paid', 'LineDx', 'Dx1', 'Dx2', 'ClinicalTrialNum', 'EpiNum', 'NDC']]
-    dfPartB = pd.concat([dfphy, dfop, dfdme])
-    dfPartB['TaxID'] = dfPartB.TaxID.apply(lambda x: str(x))
-    dfe = dfepi[['EpiNum', 'PatientName', 'Sex', 'Age', 'DeathDate', 'EpiStart', 'EpiEnd', 'CancerType',
-                 'RadiationFlag', 'HCCCount', 'PartDChemo', 'PartBTOSPaidImaging', 'PartBTOSPaidLab',
-                 'AttributedPhysicianName', 'ReconciliationEligible']]
-    dfPartB = pd.merge(dfPartB, dfe, on='EpiNum', how='left')
-    dfPartB = dfPartB[dfPartB.ReconciliationEligible>=1]
-    dfPartB = addCCSProc(dfPartB)
-    Save(dfPartB, Working + '/dfPartB')
+        xw = Use('c:/AdvAnalytics/Reference/xw_HCPCS2NDC')
+        xw.columns = ['NDC', 'CPT']
+        dfphy = pd.merge(dfphy, xw, on='CPT', how='left')
+        dfphy = dfphy[['BeneSK', 'FromDate', 'ThruDate', 'NPI', 'TaxID', 'Specialty', 'ServicePlace_lbl', 'Services',
+                       'ServiceType', 'LineFromDate', 'LineThruDate', 'CPT', 'CPTMod', 'CPTMod2', 'BETOS',
+                       'RevCode', 'LinePaid', 'Paid', 'LineDx', 'Dx1', 'Dx2', 'ClinicalTrialNum', 'EpiNum', 'NDC']]
+        dfop = dfop[['BeneSK', 'FromDate', 'ThruDate', 'NPI', 'TaxID', 'Specialty', 'ServicePlace_lbl', 'Services',
+                     'ServiceType', 'LineFromDate', 'LineThruDate', 'CPT', 'CPTMod', 'CPTMod2', 'BETOS',
+                     'RevCode', 'LinePaid', 'Paid', 'LineDx', 'Dx1', 'Dx2', 'ClinicalTrialNum', 'EpiNum', 'NDC']]
+        dfdme = dfdme[['BeneSK', 'FromDate', 'ThruDate', 'NPI', 'TaxID', 'Specialty', 'ServicePlace_lbl', 'Services',
+                       'ServiceType', 'LineFromDate', 'LineThruDate', 'CPT', 'CPTMod', 'CPTMod2', 'BETOS',
+                       'RevCode', 'LinePaid', 'Paid', 'LineDx', 'Dx1', 'Dx2', 'ClinicalTrialNum', 'EpiNum', 'NDC']]
+        dfPartB = pd.concat([dfphy, dfop, dfdme])
+        dfPartB['TaxID'] = dfPartB.TaxID.apply(lambda x: str(x))
+        dfe = dfepi[['EpiNum', 'PatientName', 'Sex', 'Age', 'DeathDate', 'EpiStart', 'EpiEnd', 'CancerType',
+                     'RadiationFlag', 'HCCCount', 'PartDChemo', 'PartBTOSPaidImaging', 'PartBTOSPaidLab',
+                     'AttributedPhysicianName', 'ReconciliationEligible']]
+        dfPartB = pd.merge(dfPartB, dfe, on='EpiNum', how='left')
+        dfPartB = dfPartB[dfPartB.ReconciliationEligible>=1]
+        dfPartB = addCCSProc(dfPartB)
+        Save(dfPartB, Working + '/dfPartB')
     return dfPartB
 
 
@@ -699,8 +715,8 @@ def addBenchmarks2dfepi(df):
         (df.CancerType == 'Bladder Cancer') & (df.LowRiskBladderFlag == 0), 'CancerTypeDetailed'] = 'Bladder, High Risk'
     df.loc[
         (df.CancerType == 'Bladder Cancer') & (df.LowRiskBladderFlag == 1), 'CancerTypeDetailed'] = 'Bladder, Low Risk'
-    df['SurgeryFlag'] = df.SurgeryFlag.astype(np.float16)
-    df['ClinicalTrialFlag'] = df.ClinicalTrialFlag.astype(np.float16)
+    df['SurgeryFlag'] = df.SurgeryFlag.astype(np.float32)
+    df['ClinicalTrialFlag'] = df.ClinicalTrialFlag.astype(np.float32)
     df['CleanPeriodRecentHistory'] = np.where(df.CleanPeriod == 1, 1., 0.)
     df['CleanPeriodOlderHistory'] = np.where(df.CleanPeriod == 2, 1., 0.)
     df['CleanPeriodNoHistory'] = np.where(df.CleanPeriod == 2, 1., 0.)
@@ -727,6 +743,72 @@ def addBenchmarks2dfepi(df):
     return df
 
 
+def prepDrugTable():
+    refNDC = Use('c:/AdvAnalytics/Reference/ref_NDC.feather')
+    refGPI = Use('c:/AdvAnalytics/Reference/ref_GPI.feather')
+    refNDC = refNDC[['NDC', 'BrandNameDrug', 'GPI']]
+    refGPI = refGPI[['GPI', 'TherapeuticClassLevel1', 'TherapeuticClassLevel2', 'TherapeuticClassLevel3', 'TherapeuticClassLevel4', 'DrugName', 'DrugNameDetailed']]
+    refNDC = pd.merge(refNDC, refGPI, on='GPI', how='left')
+    refNDC['NDC9'] = refNDC.NDC.apply(lambda x: x[:9])
+    refNDC = refNDC.groupby('NDC9').last().reset_index()
+    del refNDC['NDC']
+    return refNDC
+
+
+def dfdrugsBuild(dfop, dfphy, dfdme, dfPartD, dfepi):
+    # Should add drug costs and volumes
+    dfepi = dfepi[['DeathDate', 'ZipCode', 'EpiNum', 'EpiStart', 'EpiEnd',
+                   'CancerType', 'BaselinePrice', 'WinsorizedCost', 'AttributedPhysicianName']]
+    dfPartD = Use('Input/dfPartD.feather')
+    xw = Use('c:/AdvAnalytics/Reference/xw_HCPCS2NDC.feather')
+    xw.rename(columns={'HCPCS': 'CPT'}, inplace=True)
+    dfdme = dfdme[dfdme.NDC.notnull()]
+    dfphy = pd.merge(dfphy, xw, on='CPT')
+    try:
+        del dfop['NDC']
+    except:
+        pass
+    dfop = pd.merge(dfop, xw, on='CPT')
+    dfop.rename(columns={'RevCodeDate': 'LineFromDate'}, inplace=True)
+    dfop = dfop[['BeneSK', 'EpiNum', 'NDC', 'LineFromDate', 'LinePaid']]
+    dfphy = dfphy[['BeneSK', 'EpiNum', 'NDC', 'LineFromDate', 'LinePaid']]
+    dfdme = dfdme[['BeneSK', 'EpiNum', 'NDC', 'LineFromDate', 'LinePaid']]
+    dfPartD = dfPartD[['BeneSK', 'EpiNum', 'NDC', 'ServiceDate', 'Paid', 'DaysSupply']]
+    dfPartD.rename(columns={'Paid': 'LinePaid',
+                            'ServiceDate': 'LineFromDate'}, inplace=True)
+    dfop['ClaimType'] = 'OP'
+    dfphy['ClaimType'] = 'Office'
+    dfdme['ClaimType'] = 'DME'
+    dfPartD['ClaimType'] = 'Pharm'
+    for d in ['dfop', 'dfphy', 'dfdme']:
+        CMD = d + "['DaysSupply'] = 1"
+        exec(CMD)
+    # Append files together
+    dfdrugs = pd.concat([dfop, dfphy, dfdme, dfPartD])
+    refNDC = prepDrugTable()
+    dfdrugs['NDC9'] = dfdrugs.NDC.apply(lambda x: x[:9])
+    dfdrugs = pd.merge(dfdrugs, refNDC, how='left', on='NDC9')
+    del dfdrugs['NDC9']
+    dfdrugs['MailOrderDrug'] = np.where(dfdrugs.DaysSupply > 35, 1., 0.)
+    dfG = dfdrugs.groupby(['ClaimType', 'EpiNum', 'TherapeuticClassLevel1',
+                           'TherapeuticClassLevel2', 'TherapeuticClassLevel3',
+                           'TherapeuticClassLevel4', 'DrugName'])
+    dfA = dfG.agg({'LineFromDate': {'FirstClaimDate': 'min',
+                                    'LastClaimDate': 'max'},
+                   'LinePaid': {'TotalPaid': 'sum',
+                                'MeanClaimPaid': 'mean'},
+                   'DaysSupply': {'TotalDaysSupply': 'sum'},
+                   'MailOrderDrug': {'Claims': 'count',
+                                     'MailOrderClaims': 'sum'}})
+    dfA = postAgg(dfA)
+    dfA = pd.merge(dfepi, dfA, on='EpiNum')
+    dfA['DaysFromEpiStart'] = (dfA.FirstClaimDate - dfA.EpiStart) / np.timedelta64(1, 'D')
+    dfA['DaysBeforeEpiEnd'] = (dfA.EpiEnd - dfA.LastClaimDate) / np.timedelta64(1, 'D')
+    dfA['DaysBeforeDeath'] = (dfA.DeathDate - dfA.LastClaimDate) / np.timedelta64(1, 'D')
+    dfA['PBP'] = dfA.BaselinePrice - dfA.WinsorizedCost
+    return dfA
+
+
 ##################
 # Execution area #
 ##################
@@ -735,7 +817,6 @@ dfepi = readEpi()
 Save(dfepi, InputFeather + '/dfepi')
 
 dfdme = readDME()
-Save(dfdme, InputFeather + '/dfdme')
 dfdmeDrugs = dfdme[dfdme.NDC.notnull()]
 dfdmeDrugs.reset_index(inplace=True)
 del dfdmeDrugs['index']
@@ -763,23 +844,16 @@ Save(dfsnf, InputFeather + '/dfsnf')
 
 dfPartD = readRx()
 print('Number of rows in Part D file after reading: ' + str(len(dfPartD.index)))
-Save(dfPartD, InputFeather + '/dfPartD')
 
 dfphyhead, dfphyline, dfphy = readphy()
 print('Number of rows in phy header file after reading: ' + str(len(dfphyhead.index)))
 print('Number of rows in phy line file after reading: ' + str(len(dfphyline.index)))
 print('Number of rows in phy combined file after reading: ' + str(len(dfphy.index)))
-Save(dfphyhead, InputFeather + '/dfphyhead')
-Save(dfphyline, InputFeather + '/dfphyline')
-Save(dfphy, InputFeather + '/dfphy')
 
 dfophead, dfopline, dfop = readOP()
 print('Number of rows in OP header file after reading: ' + str(len(dfophead.index)))
 print('Number of rows in OP line file after reading: ' + str(len(dfopline.index)))
 print('Number of rows in OP combined file after reading: ' + str(len(dfop.index)))
-Save(dfophead, InputFeather + '/dfophead')
-Save(dfopline, InputFeather + '/dfopline')
-Save(dfop, InputFeather + '/dfop')
 
 dfepi = addTOSCostToEpi(dfepi, dfphy, dfop, dfip, dfsnf, dfhha, dfhs, dfPartD, dfdme)
 #print(dfepi.columns.tolist())
@@ -787,12 +861,13 @@ dfepi = addTOSCostToEpi(dfepi, dfphy, dfop, dfip, dfsnf, dfhha, dfhs, dfPartD, d
 ti=getTaxID(dfphyline)
 dfepi = physicianAttribution(dfphy, ti, dfepi)
 dfepi = addBenchmarks2dfepi(dfepi)
-Save(dfepi, Working + '/dfepi')
 
 dfPartB = combinePartB(dfop, dfphy, dfdme, dfepi)
 
 # Write radiology claims files
 writeRadiologyFile(dfPartB)
+dfdrugs = dfdrugsBuild(dfop, dfphy, dfdme, dfPartD, dfepi)
+Save(dfdrugs, Output + '/dfdrugs')
 
 # Write files for Power BI
 ip2PowerBI(dfip, dfepi)
