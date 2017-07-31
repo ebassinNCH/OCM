@@ -6,7 +6,8 @@ import sys
 sys.path.append('c:/code/general')
 from NCHGeneral import Use, Save, fewSpreadsheets
 from NCHGeneral import *
-import warnings
+pd.options.mode.chained_assignment = None  # default='warn'
+# import warnings
 # warnings.simplefilter('ignore', 'FutureWarning')
 
 global parser
@@ -578,7 +579,7 @@ def ip2PowerBI(dfip, dfepi):
     dfdrg.drop_duplicates(inplace=True)
     dfip = pd.merge(dfip, dfdrg, on='DRG', how='left')
     dfip.FromDate.apply(lambda x: pd.to_datetime('1/1/1970'))
-    dfip['MonthsFromEpiStart'] = ((dfip.FromDate - dfip.EpiStart) / np.timedelta64(1, 'M')).astype('int')
+    dfip['MonthsFromEpiStart'] = ((dfip.FromDate - dfip.EpiStart) / np.timedelta64(1, 'M')).astype(np.int32)
     Save(dfip, Output + '/dfip4PowerBI')
     return
 
@@ -746,7 +747,7 @@ def addBenchmarks2dfepi(df):
 def prepDrugTable():
     refNDC = Use('c:/AdvAnalytics/Reference/ref_NDC.feather')
     refGPI = Use('c:/AdvAnalytics/Reference/ref_GPI.feather')
-    refNDC = refNDC[['NDC', 'BrandNameDrug', 'GPI']]
+    refNDC = refNDC[['NDC', 'BrandNameDrug', 'Drug_Name', 'GPI']]
     refGPI = refGPI[['GPI', 'TherapeuticClassLevel1', 'TherapeuticClassLevel2', 'TherapeuticClassLevel3', 'TherapeuticClassLevel4', 'DrugName', 'DrugNameDetailed']]
     refNDC = pd.merge(refNDC, refGPI, on='GPI', how='left')
     refNDC['NDC9'] = refNDC.NDC.apply(lambda x: x[:9])
@@ -785,6 +786,7 @@ def dfdrugsBuild(dfop, dfphy, dfdme, dfPartD, dfepi):
         exec(CMD)
     # Append files together
     dfdrugs = pd.concat([dfop, dfphy, dfdme, dfPartD])
+    Save(dfdrugs, Working + '/dfdrugs')
     refNDC = prepDrugTable()
     dfdrugs['NDC9'] = dfdrugs.NDC.apply(lambda x: x[:9])
     dfdrugs = pd.merge(dfdrugs, refNDC, how='left', on='NDC9')
