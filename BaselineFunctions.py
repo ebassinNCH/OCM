@@ -7,8 +7,8 @@ sys.path.append('c:/code/general')
 from NCHGeneral import Use, Save, fewSpreadsheets
 from NCHGeneral import *
 pd.options.mode.chained_assignment = None  # default='warn'
-# import warnings
-# warnings.simplefilter('ignore', 'FutureWarning')
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 global parser
 global InputFeather
@@ -579,7 +579,7 @@ def ip2PowerBI(dfip, dfepi):
     dfdrg.drop_duplicates(inplace=True)
     dfip = pd.merge(dfip, dfdrg, on='DRG', how='left')
     dfip.FromDate.apply(lambda x: pd.to_datetime('1/1/1970'))
-    dfip['MonthsFromEpiStart'] = ((dfip.FromDate - dfip.EpiStart) / np.timedelta64(1, 'M')).astype(np.int32)
+    #dfip['MonthsFromEpiStart'] = ((dfip.FromDate - dfip.EpiStart) / np.timedelta64(1, 'M')).astype(np.int32)
     Save(dfip, Output + '/dfip4PowerBI')
     return
 
@@ -744,7 +744,14 @@ def addBenchmarks2dfepi(df):
     return df
 
 
-def prepDrugTable():
+def prepDrugTable(df):
+    '''
+    This function creates a crosswalk from the first 9 characters of the NDC to information about the drug class and
+    the drug name.  It creates a drug name field that concatenations the generic name with the most commonly used brand
+    name in parentheses.
+    :param df: drugs dataframe
+    :return: xwalk table from NDC9 to the classes and specific drug names.
+    '''
     refNDC = Use('c:/AdvAnalytics/Reference/ref_NDC.feather')
     refGPI = Use('c:/AdvAnalytics/Reference/ref_GPI.feather')
     refNDC = refNDC[['NDC', 'BrandNameDrug', 'Drug_Name', 'GPI']]
@@ -752,6 +759,22 @@ def prepDrugTable():
     refNDC = pd.merge(refNDC, refGPI, on='GPI', how='left')
     refNDC['NDC9'] = refNDC.NDC.apply(lambda x: x[:9])
     refNDC = refNDC.groupby('NDC9').last().reset_index()
+    xw = refNDC[['NDC9', 'TherapeuticClassLevel4', 'BrandNameDrug', 'Drug_Name', 'DrugName']]
+    df['NDC9'] = df.NDC.apply(lambda x: x[:9])
+    df = df[['EpiNum', 'NDC9']]
+    df = pd.merge(df, xw, on='NDC9', how='left')
+    del df['EpiNum']
+    gv = ['TherapeuticClassLevel4', 'DrugName', 'BrandNameDrug', 'Drug_Name']
+    dfA = df.groupby(gv).count()
+    dfA.reset_index(inplace=True)
+    dfA.sort_values(['TherapeuticClassLevel4', 'DrugName', 'BrandNameDrug', 'NDC9'],
+                    ascending=[1, 1, 0, 0], inplace=True)
+    dfA['DrugNameFull'] = dfA.DrugName + '(' + dfA.Drug_Name + ')'
+    dfA.groupby(['TherapeuticClassLevel4', 'DrugName']).first().reset_index()
+    del dfA['Drug_Name']
+    refNDC = pd.merge(refNDC, dfA, on=['TherapeuticClassLevel4', 'DrugName'], how='left')
+    refNDC['DrugName'] = refNDC.DrugNameFull
+    del refNDC['DrugNameFull']
     del refNDC['NDC']
     return refNDC
 
