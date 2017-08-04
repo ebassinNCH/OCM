@@ -109,7 +109,7 @@ def readHospice():
 
 def readIP():
     try:
-        dfhead = Use(InputFeather + '/dfip')
+        dfhead = Use(InputFeather + '/dfip2')
     except:
         fn = getFN('inphead')
         # Left off.  Need to parse dates and specify string fields
@@ -132,7 +132,7 @@ def readIP():
             dfhead[c].fillna('01JAN1970', inplace=True)
             dfhead[c] = dfhead[c].apply(lambda x: pd.to_datetime(x, format='%d%b%Y'))
     try:
-        dfline = Use(InputFeather + '/dfiprev')
+        dfline = Use(InputFeather + '/dfiprev2')
     except:
         fn = getFN('inprev')
         df = pd.read_csv(fn, delimiter='|',
@@ -149,6 +149,10 @@ def readIP():
         dfemerg['ClaimNum'] = dfemerg.ClaimNum.apply(lambda x: str(x))
         dfhead = pd.merge(dfhead, dfemerg, on='ClaimNum', how='left')
         dfhead['EmergencyAdmit'].fillna('No ER', inplace=True)
+        dficu = calcICUDays(dfline)
+        dficu['ClaimNum'] = dficu.ClaimNum.apply(lambda x: str(x))
+        dfhead = pd.merge(dfhead, dficu, on='ClaimNum', how='left')
+        dfhead.ICUDays.fillna(0, inplace=True)
     return dfhead, dfline
 
 
@@ -172,22 +176,26 @@ def readSNF():
 
 def readRx():
     try:
-        df = Use(InputFeather + '/dfPartD')
+        df = Use(InputFeather + '/dfPartD2')
     except:
         fn = getFN('_pde_')
         df = pd.read_csv(fn, delimiter='|',
                          parse_dates=['SRVC_DT'],
                          date_parser=parser,
                          dtype={'PROD_SRVC_ID': 'str'})
+        print('Rows in dfPartD after reading: ' + str(len(df.index)))
         df = RenameVars(df)
         df['Paid'] = df.LICSPaid + 0.8*df.CostAboveCatastrophic
         xwndc = Use('c:/AdvAnalytics/Reference/ref_NDC')
         xwndc = xwndc[['NDC', 'GPI']]
+        xwndc.drop_duplicates(subset=['NDC'], inplace=True)
         xw = Use('c:/AdvAnalytics/Reference/ref_GPI')
         xw = xw[['GPI', 'TherapeuticClassLevel1', 'DrugName']]
         xw = pd.merge(xw, xwndc)
+        xw.drop_duplicates(subset=['NDC'], inplace=True)
         df = pd.merge(df, xw, on='NDC', how='left')
-        Save(dfPartD, InputFeather + '/dfPartD')
+        print('Rows in dfPartD before Saving: ' + str(len(df.index)))
+        Save(df, InputFeather + '/dfPartD')
     return df
 
 
@@ -374,6 +382,21 @@ def readOP():
         Save(dfopline, InputFeather + '/dfopline')
     dfop = pd.merge(dfhead, dfline)
     return dfhead, dfline, dfop
+
+
+def calcICUDays(dfiprev):
+    dfepi = Use(InputFeather + '/dfepi')
+    dfepi = dfepi[['EpiNum', 'DeathDate']]
+    dfiprev = dfiprev[dfiprev.RevCode.between('0200', '0204')]
+    dfiprev = pd.merge(dfiprev, dfepi, on='EpiNum')
+    dfiprev = dfiprev[['ClaimNum', 'Units', 'DeathDate', 'ThruDate']]
+    dfiprev['DaysToDeath'] = (dfiprev.DeathDate - dfiprev.ThruDate) / np.timedelta64(1, 'D')
+    dfiprev['ICULast14Days'] = np.where(dfiprev.DaysToDeath.between(0, 14), 1., 0.)
+    dfiprev = dfiprev[['ClaimNum', 'Units', 'ICULast14Days']]
+    dfiprev = dfiprev.groupby('ClaimNum').agg('sum').reset_index()
+    dfiprev.rename(columns={'Units': 'ICUDays'}, inplace=True)
+    return dfiprev
+
 
 
 def addTOSMerge(df, dfepi):
@@ -563,7 +586,7 @@ def ip2PowerBI(dfip, dfepi):
                  'OrgNPI', 'AttendingNPI', 'SurgeonNPI', 'DischargeStatus', 'PPSIndicator',
                  'AdmitDate', 'AdmitType', 'AdmitSource', 'Deductible', 'Coinsurance',
                  'LOS', 'DischargeDate', 'DRG', 'OutlierFlag', 'OutlierPaid', 'AdmitDx', 'PrincipalDx', 'Dx1', 'Dx2',
-                 'Px1', 'Px1Date', 'Px2', 'Px2Date', 'EpiNum', 'ServiceType',
+                 'Px1', 'Px1Date', 'Px2', 'Px2Date', 'EpiNum', 'ServiceType', 'ICUDays', 'ICULast14Days',
                  'OncologyDRG', 'OncologyRelatedPaid', 'EmergencyAdmit']]
     dfccs = Use('c:/AdvAnalytics/Reference/ref_CCS')
     dfccs = dfccs[['Dx', 'CCS', 'CCS_lbl', 'Dx_lbl']]
@@ -579,8 +602,11 @@ def ip2PowerBI(dfip, dfepi):
     dfdrg.drop_duplicates(inplace=True)
     dfip = pd.merge(dfip, dfdrg, on='DRG', how='left')
     dfip.FromDate.apply(lambda x: pd.to_datetime('1/1/1970'))
-    #dfip['MonthsFromEpiStart'] = ((dfip.FromDate - dfip.EpiStart) / np.timedelta64(1, 'M')).astype(np.int32)
+    dfip['MonthsFromEpiStart'] = ((dfip.FromDate - dfip.EpiStart) / np.timedelta64(1, 'M'))
+    dfip.MonthsFromEpiStart.fillna(0, inplace=True)
+    dfip['MonthsFromEpiStart'] = dfip.MonthsFromEpiStart.apply(lambda x: int(x))
     Save(dfip, Output + '/dfip4PowerBI')
+    toMySQL(dfip, 'ocm', 'dfip')
     return
 
 
@@ -694,6 +720,7 @@ def addBenchmarks2dfepi(df):
     '''
     df = df[df.ReconciliationEligible > 0.5]
     df['Female'] = np.where(df.Sex == 2, 1.0, 0.0)
+    df['HasClinicalTrial'] = np.where(df.ClinicalTrialFlag>0.5, 1., 0.)
     df['DiedDuringEpisode'] = np.where(df.DeathDate.between(df.EpiStart, df.EpiEnd), 1.0, 0.0)
     df['DualEligible'] = np.where(df.DualPartDLIS == 3, 1., 0.)
     df['HasPartD'] = np.where(df.DualPartDLIS.between(1, 2), 1., 0.)
@@ -722,6 +749,7 @@ def addBenchmarks2dfepi(df):
     df['CleanPeriodOlderHistory'] = np.where(df.CleanPeriod == 2, 1., 0.)
     df['CleanPeriodNoHistory'] = np.where(df.CleanPeriod == 2, 1., 0.)
     listCols = ['Female', 'Age', 'DiedDuringEpisode', 'DualEligible', 'HasPartD', 'HasLIS',
+                'HasClinicalTrial',
                 'HadRadOnc', 'NumberHCCs', 'CancerTypeDetailed', 'CleanPeriodRecentHistory',
                 'CleanPeriodOlderHistory', 'CleanPeriodNoHistory', 'BaselinePrice',
                 'WinsorizedCost', 'ActualCost', 'PartBTOSPaidProcedures', 'PartBTOSPaidDrugs',
@@ -767,11 +795,12 @@ def prepDrugTable(df):
     gv = ['TherapeuticClassLevel4', 'DrugName', 'BrandNameDrug', 'Drug_Name']
     dfA = df.groupby(gv).count()
     dfA.reset_index(inplace=True)
-    dfA.sort_values(['TherapeuticClassLevel4', 'DrugName', 'BrandNameDrug', 'NDC9'],
-                    ascending=[1, 1, 0, 0], inplace=True)
+    dfA.sort_values(['TherapeuticClassLevel4', 'DrugName', 'BrandNameDrug'],
+                    ascending=[1, 1, 0], inplace=True)
     dfA['DrugNameFull'] = dfA.DrugName + '(' + dfA.Drug_Name + ')'
     dfA.groupby(['TherapeuticClassLevel4', 'DrugName']).first().reset_index()
     del dfA['Drug_Name']
+    del dfA['NDC9']
     refNDC = pd.merge(refNDC, dfA, on=['TherapeuticClassLevel4', 'DrugName'], how='left')
     refNDC['DrugName'] = refNDC.DrugNameFull
     del refNDC['DrugNameFull']
@@ -810,7 +839,7 @@ def dfdrugsBuild(dfop, dfphy, dfdme, dfPartD, dfepi):
     # Append files together
     dfdrugs = pd.concat([dfop, dfphy, dfdme, dfPartD])
     Save(dfdrugs, Working + '/dfdrugs')
-    refNDC = prepDrugTable()
+    refNDC = prepDrugTable(dfdrugs)
     dfdrugs['NDC9'] = dfdrugs.NDC.apply(lambda x: x[:9])
     dfdrugs = pd.merge(dfdrugs, refNDC, how='left', on='NDC9')
     del dfdrugs['NDC9']
@@ -832,6 +861,73 @@ def dfdrugsBuild(dfop, dfphy, dfdme, dfPartD, dfepi):
     dfA['DaysBeforeDeath'] = (dfA.DeathDate - dfA.LastClaimDate) / np.timedelta64(1, 'D')
     dfA['PBP'] = dfA.BaselinePrice - dfA.WinsorizedCost
     return dfA
+
+
+def build_dfie(dfop, dfip, dfiprev, dfepi):
+    '''
+    This function builds a dataframe with one record for each emergency visit along with the discharge disposition
+    (admitted, sent home, transferred and admitted) for each visit.
+    :param dfop: the outpat claims dataframe
+    :param dfip: the inpat claims dataframe
+    :param dfiprev: the inpat line dataframe
+    :param dfepi: the episode summary dataframe
+    :return: dfie--a dataframe with one record for each ER visit along with disposition, diagnosis, facility, cost,
+                   and other information.
+    '''
+    dfiprev = Use('Input/dfiprev.feather')
+    dfip = Use('Input/dfip.feather')
+    dfop = Use('Input/dfop.feather')
+    listCols = ['BeneSK', 'FromDate', 'ThruDate', 'CCN', 'AttendingNPI', 'Dx1', 'EpiNum',
+                'RevCode', 'RevCodeDate', 'CPT', 'LinePatientPaid', 'LinePaid']
+    dfop = dfop[listCols]
+    dfepi = Use('Working/dfepi.feather')
+
+    dfiprev = dfiprev[dfiprev.RevCode.between('0450', '0459')]
+    dfiprev['RevCodeDate'] = dfiprev.FromDate
+    dfiprev = dfiprev[['RevCode', 'RevCodeDate', 'CPT', 'EpiNum', 'CCN', 'Paid', 'AttendingNPI',
+                       'AdmitDate', 'Deductible', 'LOS', 'DischargeDate', 'Dx1']]
+    dfiprev['ClaimType'] = 'Admitted'
+    # Filter the OP dataframe for records with ER visit codes
+    dfop = dfop[dfop.RevCode.between('0450', '0459')]
+    # Find ER visits that are transferred
+    dfip = dfip[['EpiNum', 'BeneSK', 'AdmitDate', 'DischargeDate', 'Paid', 'LOS', 'Deductible']]
+    dfip['ClaimType'] = 'Transfer'
+    dfip.drop_duplicates(inplace=True)
+    dfop2 = pd.merge(dfop, dfip, on=['EpiNum', 'BeneSK'])
+    dfop2 = dfop2[dfop2.RevCodeDate == dfop2.AdmitDate]
+    dfop2 = dfop2[['BeneSK', 'EpiNum', 'AdmitDate', 'DischargeDate', 'Paid', 'LOS', 'Deductible', 'ClaimType']]
+    dfop = pd.merge(dfop, dfop2, on=['EpiNum', 'BeneSK'], how='left')
+    # Now clean up the fields that might not be in OP
+    dfop['AdmitDate'].fillna(dfop.ThruDate, inplace=True)
+    dfop['DischargeDate'].fillna(dfop.ThruDate, inplace=True)
+    dfop['Deductible'].fillna(0, inplace=True)
+    dfop['Deductible'] += dfop.LinePatientPaid
+    dfop['LOS'].fillna(0, inplace=True)
+    dfop.ClaimType.fillna('Sent Home', inplace=True)
+    # Get a common list of filed with dfiprev then append the dataframes
+    dfop = dfop[['RevCode', 'RevCodeDate', 'CPT', 'EpiNum', 'CCN', 'Paid', 'AttendingNPI',
+                 'AdmitDate', 'Deductible', 'LOS', 'DischargeDate', 'Dx1', 'ClaimType']]
+    dfie = pd.concat([dfiprev, dfop])
+    # Now add code information to the file
+    xw = Use('/AdvAnalytics/Reference/xw_Dx2CCS.feather')
+    xw.columns = ['Dx1', 'CCS']
+    ref = Use('/AdvAnalytics/Reference/code_CCS.feather')
+    ref.drop_duplicates(inplace=True)
+    xw = pd.merge(xw, ref, on='CCS')
+    xw.drop_duplicates(subset='Dx1', inplace=True)
+    dfie = pd.merge(dfie, xw, on='Dx1', how='left')
+    ref = Use('/AdvAnalytics/Reference/ref_ProviderOfService.feather')
+    ref = ref[['CCN', 'CCN_lbl', 'State', 'CBSA', 'Beds', 'ChemoServiceCode']]
+    dfie = pd.merge(dfie, ref, on='CCN', how='left')
+    listCols = ['Age', 'DeathDate', 'EpiNum', 'EpiStart', 'EpiEnd', 'CancerType',
+                'ClinicalTrialFlag', 'WinsorizedCost', 'ActualCost', 'BaselinePrice',
+                'PatientName', 'IPAdmits', 'AttributedNPI', 'AttributedPhysicianName',
+                'Female', 'DiedDuringEpisode', 'DualEligible', 'CancerTypeDetailed']
+    dfepi = dfepi[listCols]
+    dfie = pd.merge(dfie, dfepi, on='EpiNum')
+    Save(dfie, Output + '/dfie')
+    toMySQL(dfie, 'ocm', 'dfie')
+    return dfie
 
 
 ##################
@@ -886,6 +982,9 @@ dfepi = addTOSCostToEpi(dfepi, dfphy, dfop, dfip, dfsnf, dfhha, dfhs, dfPartD, d
 ti=getTaxID(dfphyline)
 dfepi = physicianAttribution(dfphy, ti, dfepi)
 dfepi = addBenchmarks2dfepi(dfepi)
+toMySQL(dfepi, 'ocm', 'dfepi')
+
+build_dfie(dfop, dfip, dfiprev, dfepi)
 
 dfPartB = combinePartB(dfop, dfphy, dfdme, dfepi)
 
