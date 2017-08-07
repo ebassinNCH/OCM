@@ -151,9 +151,9 @@ def readIP():
         dfhead['EmergencyAdmit'].fillna('No ER', inplace=True)
         dficu = calcICUDays(dfline)
         dficu['ClaimNum'] = dficu.ClaimNum.apply(lambda x: str(x))
-        dfhead = pd.merge(dfhead, dficu, on='ClaimNum', how='left')
+        dfhead = pd.merge(dfhead, dficu, on=['EpiNum', 'ClaimNum'], how='left')
         dfhead.ICUDays.fillna(0, inplace=True)
-    return dfhead, dfline
+    return dfhead, dfline, dficu
 
 
 def readSNF():
@@ -389,14 +389,27 @@ def calcICUDays(dfiprev):
     dfepi = dfepi[['EpiNum', 'DeathDate']]
     dfiprev = dfiprev[dfiprev.RevCode.between('0200', '0204')]
     dfiprev = pd.merge(dfiprev, dfepi, on='EpiNum')
-    dfiprev = dfiprev[['ClaimNum', 'Units', 'DeathDate', 'ThruDate']]
+    dfiprev = dfiprev[['ClaimNum', 'Units', 'DeathDate', 'ThruDate', 'EpiNum']]
     dfiprev['DaysToDeath'] = (dfiprev.DeathDate - dfiprev.ThruDate) / np.timedelta64(1, 'D')
     dfiprev['ICULast14Days'] = np.where(dfiprev.DaysToDeath.between(0, 14), 1., 0.)
-    dfiprev = dfiprev[['ClaimNum', 'Units', 'ICULast14Days']]
+    dfiprev = dfiprev[['ClaimNum', 'Units', 'ICULast14Days', 'EpiNum']]
     dfiprev = dfiprev.groupby('ClaimNum').agg('sum').reset_index()
     dfiprev.rename(columns={'Units': 'ICUDays'}, inplace=True)
     return dfiprev
 
+
+def addICU2Epi(dficu, dfepi):
+    dfG = dficu.groupby('EpiNum')
+    dfA = dfG.agg({'ICUDays' : {'ICUDays': 'sum',
+                                'ICUStays': 'count'},
+                   'ICULast14Days': {'ICULast14Days': 'sum'}})
+    dfA = postAgg(dfA)
+    dfA.loc[dfA['ICULast14Days']>1, 'ICULast14Days']=1.
+    print('    dficu episodes: %d' % (len(dfA.index)) )
+    dfepi = pd.merge(dfepi, dfA, on='EpiNum', how='left')
+    listCols = ['ICUDays', 'ICUStays', 'ICULast14Days']
+    dfepi[listCols].fillna(0, inplace=True)
+    return dfepi
 
 
 def addTOSMerge(df, dfepi):
@@ -425,6 +438,11 @@ def addTOSCostToEpi(dfepi, dfphy, dfop, dfip, dfsnf, dfhha, dfhs, dfPartD, dfDME
     '''
     # Start by breaking the "phy" claims down into BETOS driven types of service
     print('Starting addTOSCostToEpi at ' + ctime())
+    dfdeath = dfepi[['EpiNum', 'DeathDate']]
+    dfphy = pd.merge(dfdeath, dfphy, on='EpiNum')
+    dfphy['DaysBeforeDeath'] = (dfphy.DeathDate - dfphy.LineFromDate) / np.timedelta64(1, 'D')
+    dfphy['Last14Days'] = dfphy.DaysBeforeDeath.apply(lambda x: np.where(x<=14, 1, 0))
+    dfphy['PaidLast14'] = dfphy.LinePaid * dfphy.Last14Days
     dfG = dfphy.groupby(['EpiNum', 'BETOSLevel3Group'])
     dfA = dfG.agg({'LinePaid': {'Paid': 'sum'}})
     dfA.columns = dfA.columns.droplevel(0)
@@ -435,7 +453,6 @@ def addTOSCostToEpi(dfepi, dfphy, dfop, dfip, dfsnf, dfhha, dfhs, dfPartD, dfDME
         newc = 'phyTOSPaid' + c
         dfB.rename(columns={c: newc}, inplace=True)
     dfB.fillna(0, inplace=True)
-    dfG = dfphy.groupby(['EpiNum', 'BETOSLevel3Group'])
     dfA = dfG.agg({'LinePaid': {'Services': 'count'}})
     dfA.columns = dfA.columns.droplevel(0)
     dfC = dfA.unstack(level=1)
@@ -444,7 +461,14 @@ def addTOSCostToEpi(dfepi, dfphy, dfop, dfip, dfsnf, dfhha, dfhs, dfPartD, dfDME
         newc = 'phyTOSServices' + c
         dfC.rename(columns={c: newc}, inplace=True)
     dfC.fillna(0, inplace=True)
+    dfD = dfG.agg({'PaidLast14': {'PaidLast14': 'sum'}})
+    dfD.columns = dfD.columns.droplevel(0)
+    for c in dfD.columns.tolist():
+        newc = 'phyTOSPaidLast14' + c
+        dfC.rename(columns={c: newc}, inplace=True)
+    dfC.fillna(0, inplace=True)
     dfphy = pd.merge(dfB, dfC, left_index=True, right_index=True)
+    dfphy = pd.merge(dfD, dfphy, left_index=True, right_index=True)
     dfphy.reset_index(inplace=True)
     listCols = dfphy.columns.tolist()
     listCols.remove('EpiNum')
@@ -605,8 +629,30 @@ def ip2PowerBI(dfip, dfepi):
     dfip['MonthsFromEpiStart'] = ((dfip.FromDate - dfip.EpiStart) / np.timedelta64(1, 'M'))
     dfip.MonthsFromEpiStart.fillna(0, inplace=True)
     dfip['MonthsFromEpiStart'] = dfip.MonthsFromEpiStart.apply(lambda x: int(x))
+    dfip.DeathDate.fillna(pd.to_datetime('1/1/1970'), inplace=True)
+    dfip['DischargeDaysToDeath'] = (dfip.DeathDate - dfip.DischargeDate) / np.timedelta64(1, 'D')
+    dfi = dfip.copy()
     Save(dfip, Output + '/dfip4PowerBI')
     toMySQL(dfip, 'ocm', 'dfip')
+    dfG = dfip.groupby('EpiNum')
+    dfA = dfG.agg({'DischargeDate': {'FirstDischargeDate' : 'min',
+                                     'LastDischargeDate' : 'max'},
+                   'AdmitDate': {'FirstAdmitDate': 'min',
+                                 'LastAdmitDate': 'max',
+                                 'NumberOfAdmits': 'count'}})
+    dfA = postAgg(dfA)
+    dfe = dfepi[['EpiNum', 'EpiStart', 'EpiEnd', 'DeathDate']]
+    dfip = pd.merge(dfA, dfe, on='EpiNum')
+    dfip[['FirstAdmitDate','LastAdmitDate','FirstDischargeDate','LastDischargeDate']].fillna(
+        pd.to_datetime('1/1/1970'), inplace=True)
+    dfip.NumberOfAdmits.fillna(0, inplace=True)
+    dfi['DischargeDaysToDeath'] = (dfi.DeathDate - dfi.DischargeDate) / np.timedelta64(1, 'D')
+    dfi['DaysToFirstAdmit'] = (dfi.FirstAdmitDate - dfi.EpiStart) / np.timedelta64(1, 'D')
+    dfi['DaysLastAdmitToEpiEnd'] =  (dfi.EpiEnd - dfi.LastAdmitDate) / np.timedelta64(1, 'D')
+    dfi['DaystoFirstDischarge'] = (dfi.FirstDischargeDate - dfi.EpiStart) / np.timedelta64(1, 'D')
+    dfi['DaysLastDischargeToEpiEnd'] = (dfi.EpiEnd - dfi.LastDischargeDate) / np.timedelta64(1, 'D')
+    Save(dfi, Outpat + '/dfInpatEpiSummary')
+    toMySQL(dfi, 'ocm', 'dfInpatEpiSummary')
     return
 
 
@@ -838,12 +884,18 @@ def dfdrugsBuild(dfop, dfphy, dfdme, dfPartD, dfepi):
         exec(CMD)
     # Append files together
     dfdrugs = pd.concat([dfop, dfphy, dfdme, dfPartD])
-    Save(dfdrugs, Working + '/dfdrugs')
     refNDC = prepDrugTable(dfdrugs)
     dfdrugs['NDC9'] = dfdrugs.NDC.apply(lambda x: x[:9])
+    try:
+        del dfdrugs['BrandNameDrug']
+    except:
+        print('BrandNameDrug not found')
     dfdrugs = pd.merge(dfdrugs, refNDC, how='left', on='NDC9')
     del dfdrugs['NDC9']
     dfdrugs['MailOrderDrug'] = np.where(dfdrugs.DaysSupply > 35, 1., 0.)
+    dfdrugs = pd.merge(dfdrugs, dfepi, on='EpiNum')
+    #Save(dfdrugs, Working + '/dfdrugs')
+    toMySQL(dfdrugs, 'ocm', 'dfdrugsDetail')
     dfG = dfdrugs.groupby(['ClaimType', 'EpiNum', 'TherapeuticClassLevel1',
                            'TherapeuticClassLevel2', 'TherapeuticClassLevel3',
                            'TherapeuticClassLevel4', 'DrugName'])
@@ -860,6 +912,15 @@ def dfdrugsBuild(dfop, dfphy, dfdme, dfPartD, dfepi):
     dfA['DaysBeforeEpiEnd'] = (dfA.EpiEnd - dfA.LastClaimDate) / np.timedelta64(1, 'D')
     dfA['DaysBeforeDeath'] = (dfA.DeathDate - dfA.LastClaimDate) / np.timedelta64(1, 'D')
     dfA['PBP'] = dfA.BaselinePrice - dfA.WinsorizedCost
+    df = dfA[['EpiNum', 'DaysBeforeEpiEnd', 'DaysFromEpiStart', 'DaysBeforeDeath']]
+    dfG = dfA.groupby('EpiNum')
+    df1 = dfG.agg({'DaysBeforeEpiEnd': {'LastDrugDaysBeforeEpiEnd': 'min'},
+                   'DaysFromEpiStart': {'FirstDrugDaysAfterEpiStart': 'min'},
+                   'DaysBeforeDeath' : {'LastDrugDaysBeforeDeath' : 'min'}})
+    df1 = postAgg(df1)
+    df1.LastDrugDaysBeforeDeath.fillna(-99, inplace=True)
+    Save(df1, Output + '/dfDrugTiming')
+    #toMySQL(df1, 'ocm', 'dfDrugTiming')
     return dfA
 
 
@@ -953,7 +1014,7 @@ dfhs = readHospice()
 print('Number of rows in Hospice file after reading: ' + str(len(dfhs.index)))
 Save(dfhs, InputFeather + '/dfhs')
 
-dfip, dfiprev = readIP()
+dfip, dfiprev, dficu = readIP()
 print('Number of rows in IP header file after reading: ' + str(len(dfip.index)))
 print('Number of rows in IP revenue file after reading: ' + str(len(dfiprev.index)))
 Save(dfip, InputFeather + '/dfip')
@@ -982,6 +1043,7 @@ dfepi = addTOSCostToEpi(dfepi, dfphy, dfop, dfip, dfsnf, dfhha, dfhs, dfPartD, d
 ti=getTaxID(dfphyline)
 dfepi = physicianAttribution(dfphy, ti, dfepi)
 dfepi = addBenchmarks2dfepi(dfepi)
+dfepi = addICU2Epi(dficu, dfepi)
 toMySQL(dfepi, 'ocm', 'dfepi')
 
 build_dfie(dfop, dfip, dfiprev, dfepi)
