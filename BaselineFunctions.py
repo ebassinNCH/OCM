@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 from time import ctime
+import pyodbc
 import sys
 sys.path.append('c:/code/general')
 from NCHGeneral import Use, Save, fewSpreadsheets, postAgg, getFN, RenameVars, toMySQL
@@ -82,6 +83,12 @@ def readDME():
     dfline = RenameVars(df)
     dfdme = pd.merge(dfhead, dfline, how='left')
     dfdme.CPTMod2.fillna(' ', inplace=True)
+    xwndc = Use('c:/AdvAnalytics/Reference/ref_NDC')
+    xwndc = xwndc[['NDC', 'GPI']]
+    xwndc.drop_duplicates(subset=['NDC'], inplace=True)
+    xwndc.GPI.fillna(' ', inplace=True)
+    xwndc['GPI10'] = xwndc.GPI.apply(lambda x: x[:10])
+    dfdme = pd.merge(dfdme, xwndc, on='NDC', how='left')
     Save(dfdme, InputFeather + '/dfdme')
     return dfdme
 
@@ -194,6 +201,9 @@ def readRx():
         xw = pd.merge(xw, xwndc)
         xw.drop_duplicates(subset=['NDC'], inplace=True)
         df = pd.merge(df, xw, on='NDC', how='left')
+        df['GPI'] = df.GPI.apply(lambda x: str(x))
+        df['GPI'] = df.GPI.apply(lambda x: x.zfill(14))
+        df['GPI10'] = df.GPI.apply(lambda x: x[:10])
         print('Rows in dfPartD before Saving: ' + str(len(df.index)))
         Save(df, InputFeather + '/dfPartD')
     return df
@@ -232,6 +242,9 @@ def readphy():
                          parse_dates=['CLM_THRU_DT', 'LINE_1ST_EXPNS_DT', 'LINE_LAST_EXPNS_DT'],
                          date_parser=parser)
         dfline = RenameVars(df)
+        for c in ['LineNum', 'PricingLocality', 'LineMTUSCount', 'LineMTUSCode', 'LineDxVersion']:
+            del dfline[c]
+        dfline['Services'] = dfline.Services.apply(lambda x: x.astype('int16'))
         xw = Use('c:/AdvAnalytics/Reference/ref_BETOS')
         xw = xw[['BETOS', 'Level3Group_lbl']]
         xw.columns = ['BETOS', 'BETOSLevel3Group']
@@ -245,10 +258,43 @@ def readphy():
         xw.loc[xw.BETOS.isin(['M3']),  'BETOSLevel3Group'] = 'Emerg'
         xw.loc[xw.BETOS.isin(['P7A']), 'BETOSLevel3Group'] = 'RadOnc'
         xw.loc[xw.BETOS.isin(['T2A', 'T2B', 'T2C', 'T2D']), 'BETOSLevel3Group'] = 'Other'
-        dfline = pd.merge(dfline, xw)
-        Save(dfphyline, InputFeather + '/dfphyline')
+        dfline = pd.merge(dfline, xw, how='left')
+        '''
+        conn = pyodbc.connect('DRIVER={SQL Server};SERVER=BIDATACA2;DATABASE=EDW;UID=ebassin;\
+                              PWD=ebassin;Trusted_Connection=yes')
+        ## This section adds the 10 digit GPI code to the claim line where appropriate.
+        # Build the J Code to GPI crosswalk
+        myQuery = 'SELECT ServiceCode, NdcNumber FROM EDW.MSTR.AvgSalesPrice_NDC'
+        xw = pd.read_sql(myQuery, conn)
+        xw.columns = ['CPT', 'NDC']
+        xw['NDC'] = xw.NDC.apply(lambda x: x.replace('-', ''))
+        xw['NDC9'] = xw.NDC.apply(lambda x: x[:9])
+        del xw['NDC']
+        Save(xw, 'c:/temp/xw_CPT2NDC9')
+        '''
+        #xw = Use('c:/AdvAnalytics/Reference/xw_CPT2BETOS')
+        #dfline = pd.merge(dfline, xw, on='CPT', how='left')
+        xw = Use('c:/temp/xw_CPT2NDC9')
+        dfline = pd.merge(dfline, xw, on='CPT', how='left')
+        xw = Use('/AdvAnalytics/Reference/ref_NDC')
+        xw['NDC9'] = xw.NDC.apply(lambda x: x[:9])
+        xw['GPI'] = xw.GPI.apply(lambda x: str(x))
+        xw['GPI'] = xw.GPI.apply(lambda x: x.zfill(14))
+        xw.GPI.fillna('MISSING', inplace=True)
+        xw['GPI10'] = xw.GPI.apply(lambda x: x[:10])
+        xw = xw[['NDC9', 'GPI10']]
+        xw.drop_duplicates(subset='NDC9', inplace=True)
+        Save(xw, 'c:/temp/NDC9ToGPI10')
+        xw.set_index('NDC9', inplace=True)
+        dictNDC = xw.to_dict()
+        print(dfline.info())
+        dfline['GPI10'] = dfline.NDC9.map(dictNDC)
+        # dfline = pd.merge(dfline, xw, on='NDC9', how='left')
+        Save(dfline, InputFeather + '/dfphyline')
+    print(dfline.columns.tolist())
+    print(dfhead.columns.tolist())
     dfphy = pd.merge(dfline, dfhead)
-    # Save(dfphy, InputFeather + '/dfphy')
+    Save(dfphy, InputFeather + '/dfphy')
     return dfhead, dfline, dfphy
 
 
@@ -379,8 +425,34 @@ def readOP():
                  'BETOSLevel3Group'] = 'Drugs'
         dfline.loc[(dfline.RevCode.between('0710', '0719')) & (dfline.BETOSLevel3Group == 'Other'),
                  'BETOSLevel3Group'] = 'Procedures'
-        Save(dfopline, InputFeather + '/dfopline')
+        # Add the GPI 10 to the claim line.  This section uses NDC if it exists and uses the J Code if the NDC
+        # does not exist.
+        xw = Use('c:/temp/xw_CPT2NDC9')
+        xw.drop_duplicates(subset='CPT', inplace=True)
+        xw['NDC9'] = xw.NDC9.apply(lambda x: str(x))
+        xw['NDC9'] = xw.NDC9.apply(lambda x: x.zfill(9))
+        dfline = pd.merge(dfline, xw, on='CPT', how='left')
+        xw = Use('/AdvAnalytics/Reference/ref_NDC')
+        xw['NDC9'] = xw.NDC.apply(lambda x: x[:9])
+        xw.GPI.fillna('MISSING', inplace=True)
+        xw['GPI'] = xw.GPI.apply(lambda x: str(x))
+        xw['GPI'] = xw.GPI.apply(lambda x: x.zfill(14))
+        xw['GPI10'] = xw.GPI.apply(lambda x: x[:10])
+        xw = xw[['NDC9', 'GPI10']]
+        xw.drop_duplicates(subset='NDC9', inplace=True)
+        dfline = pd.merge(dfline, xw, on='NDC9', how='left')
+        dfline.rename(columns={'GPI10': 'GPICPT'}, inplace=True)
+        dfline['NDC'] = dfline.NDC.apply(lambda x: str(x))
+        dfline['NDC'] = dfline.NDC.apply(lambda x: x.zfill(11))
+        dfline['NDC9'] = dfline.NDC.apply(lambda x: x[:9])
+        dfline = pd.merge(dfline, xw, on='NDC9', how='left')
+        dfline.loc[dfline.GPI10.isnull(), 'GPI10'] = dfline.GPICPT
+        dfline.to_csv('c:/temp/op.csv')
+        #Save(dfline, InputFeather + '/dfopline')
+        Save(dfline, InputFeather + '/dfopline')
     dfop = pd.merge(dfhead, dfline)
+    # dfop.to_csv('c:/temp/dfop.csv')
+    Save(dfop, InputFeather + '/dfop')
     return dfhead, dfline, dfop
 
 
@@ -887,7 +959,9 @@ def addRegimen(dfdrugs, dfepi):
         ascending=[1, 1, 0, 0], inplace=True)
     dfA = dfA.groupby('EpiNum').first().reset_index()
     dfepi = pd.merge(dfepi, dfA, on='EpiNum', how='left')
-    return dfepidef addBenchmarks2dfepi(df):
+    return dfepi
+
+def addBenchmarks2dfepi(df):
     '''
     This function adds benchmark rates for certain key variables to dfepi, e.g., the percentage of patients who have
     radiation therapy during their episodes.  Benchmarks are the mean by detailed cancer type (included the
@@ -1007,10 +1081,10 @@ def dfdrugsBuild(dfop, dfphy, dfdme, dfPartD, dfepi):
         pass
     dfop = pd.merge(dfop, xw, on='CPT')
     dfop.rename(columns={'RevCodeDate': 'LineFromDate'}, inplace=True)
-    dfop = dfop[['BeneSK', 'EpiNum', 'NDC', 'LineFromDate', 'LinePaid']]
-    dfphy = dfphy[['BeneSK', 'EpiNum', 'NDC', 'LineFromDate', 'LinePaid']]
-    dfdme = dfdme[['BeneSK', 'EpiNum', 'NDC', 'LineFromDate', 'LinePaid']]
-    dfPartD = dfPartD[['BeneSK', 'EpiNum', 'NDC', 'ServiceDate', 'Paid', 'DaysSupply']]
+    dfop = dfop[['BeneSK', 'EpiNum', 'NDC', 'LineFromDate', 'LinePaid', 'GPI10']]
+    dfphy = dfphy[['BeneSK', 'EpiNum', 'NDC', 'LineFromDate', 'LinePaid', 'GPI10']]
+    dfdme = dfdme[['BeneSK', 'EpiNum', 'NDC', 'LineFromDate', 'LinePaid', 'GPI10']]
+    dfPartD = dfPartD[['BeneSK', 'EpiNum', 'NDC', 'ServiceDate', 'Paid', 'DaysSupply', 'GPI10']]
     dfPartD.rename(columns={'Paid': 'LinePaid',
                             'ServiceDate': 'LineFromDate'}, inplace=True)
     dfop['ClaimType'] = 'OP'
@@ -1144,6 +1218,7 @@ def build_dfie(dfop, dfip, dfiprev, dfepi):
 # Execution area #
 ##################
 createDirectories()
+'''
 dfepi = readEpi()
 Save(dfepi, InputFeather + '/dfepi')
 
@@ -1158,33 +1233,41 @@ print('Number of rows in DME file after reading: ' + str(len(dfdme.index)))
 dfhha = readHHA()
 print('Number of rows in HHA file after reading: ' + str(len(dfhha.index)))
 Save(dfhha, InputFeather + '/dfhha')
+print()
 
 dfhs = readHospice()
 print('Number of rows in Hospice file after reading: ' + str(len(dfhs.index)))
 Save(dfhs, InputFeather + '/dfhs')
+print()
 
 dfip, dfiprev, dficu = readIP()
 print('Number of rows in IP header file after reading: ' + str(len(dfip.index)))
 print('Number of rows in IP revenue file after reading: ' + str(len(dfiprev.index)))
 Save(dfip, InputFeather + '/dfip')
 Save(dfiprev, InputFeather + '/dfiprev')
+print()
 
 dfsnf = readSNF()
 print('Number of rows in SNF header file after reading: ' + str(len(dfsnf.index)))
 Save(dfsnf, InputFeather + '/dfsnf')
+print()
 
 dfPartD = readRx()
 print('Number of rows in Part D file after reading: ' + str(len(dfPartD.index)))
-
-dfphyhead, dfphyline, dfphy = readphy()
-print('Number of rows in phy header file after reading: ' + str(len(dfphyhead.index)))
-print('Number of rows in phy line file after reading: ' + str(len(dfphyline.index)))
-print('Number of rows in phy combined file after reading: ' + str(len(dfphy.index)))
+print()
 
 dfophead, dfopline, dfop = readOP()
 print('Number of rows in OP header file after reading: ' + str(len(dfophead.index)))
 print('Number of rows in OP line file after reading: ' + str(len(dfopline.index)))
 print('Number of rows in OP combined file after reading: ' + str(len(dfop.index)))
+print()
+'''
+
+dfphyhead, dfphyline, dfphy = readphy()
+print('Number of rows in phy header file after reading: ' + str(len(dfphyhead.index)))
+print('Number of rows in phy line file after reading: ' + str(len(dfphyline.index)))
+print('Number of rows in phy combined file after reading: ' + str(len(dfphy.index)))
+print()
 
 dfepi = addTOSCostToEpi(dfepi, dfphy, dfop, dfip, dfsnf, dfhha, dfhs, dfPartD, dfdme)
 #print(dfepi.columns.tolist())
