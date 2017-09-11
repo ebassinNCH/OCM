@@ -242,9 +242,10 @@ def readphy():
                          parse_dates=['CLM_THRU_DT', 'LINE_1ST_EXPNS_DT', 'LINE_LAST_EXPNS_DT'],
                          date_parser=parser)
         dfline = RenameVars(df)
-        for c in ['LineNum', 'PricingLocality', 'LineMTUSCount', 'LineMTUSCode', 'LineDxVersion']:
+        print('Initial rows. in dfline: ')
+        for c in ['LineNum', 'PricingLocality', 'LineMTUSCount', 'LineMTUSCode', 'LineDxVersion', 'LineProcessingIndic']:
             del dfline[c]
-        dfline['Services'] = dfline.Services.apply(lambda x: x.astype('int16'))
+        dfline['Services'] = dfline.Services.astype('int16')
         xw = Use('c:/AdvAnalytics/Reference/ref_BETOS')
         xw = xw[['BETOS', 'Level3Group_lbl']]
         xw.columns = ['BETOS', 'BETOSLevel3Group']
@@ -275,6 +276,7 @@ def readphy():
         #xw = Use('c:/AdvAnalytics/Reference/xw_CPT2BETOS')
         #dfline = pd.merge(dfline, xw, on='CPT', how='left')
         xw = Use('c:/temp/xw_CPT2NDC9')
+        xw.drop_duplicates(subset='CPT', inplace=True)
         dfline = pd.merge(dfline, xw, on='CPT', how='left')
         xw = Use('/AdvAnalytics/Reference/ref_NDC')
         xw['NDC9'] = xw.NDC.apply(lambda x: x[:9])
@@ -447,11 +449,8 @@ def readOP():
         dfline['NDC9'] = dfline.NDC.apply(lambda x: x[:9])
         dfline = pd.merge(dfline, xw, on='NDC9', how='left')
         dfline.loc[dfline.GPI10.isnull(), 'GPI10'] = dfline.GPICPT
-        dfline.to_csv('c:/temp/op.csv')
-        #Save(dfline, InputFeather + '/dfopline')
         Save(dfline, InputFeather + '/dfopline')
     dfop = pd.merge(dfhead, dfline)
-    # dfop.to_csv('c:/temp/dfop.csv')
     Save(dfop, InputFeather + '/dfop')
     return dfhead, dfline, dfop
 
@@ -597,6 +596,9 @@ def addTOSCostToEpi(dfepi, dfphy, dfop, dfip, dfsnf, dfhha, dfhs, dfPartD, dfDME
     dfepi = pd.merge(dfepi, dfop, how='left')
     print('    After dfop merge, there are %d episodes' % (len(dfepi.index)))
     dfepi[listCols].fillna(0, inplace=True)
+    for c in dfepi.columns.tolist():
+        if ('Paid' in c) | ('Services' in c):
+            dfepi[c].fillna(0, inplace=True)
     for c in listGroups:
         dfepi['PartBTOSPaid' + c] = dfepi['phyTOSPaid' + c] + dfepi['opTOSPaid' + c]
         dfepi['PartBTOSServices' + c] = dfepi['phyTOSServices' + c] + dfepi['opTOSServices' + c]
@@ -911,6 +913,34 @@ def enhancedfepi(dfepi, dfop):
     return dfepi
 
 
+def findQ(df):
+    df['QCode'] = np.where( (df.CPTMod.isin(['Q0', 'Q1'])) | (df.CPTMod2.isin(['Q0', 'Q1'])), 1, 0)
+    df = df[['EpiNum', 'QCode']]
+    df = df.groupby('EpiNum').sum()
+    return df
+
+
+def assessClinicalTrial(dfop, dfphy, dfepi):
+    dfphy = dfphy[['EpiNum', 'CPTMod', 'CPTMod2']]
+    dfop = dfop[['EpiNum', 'CPTMod', 'CPTMod2']]
+    df1 = findQ(dfphy)
+    df2 = findQ(dfop)
+    df1 = pd.concat([df1, df2])
+    df1 = df1.groupby('EpiNum').sum()
+    df1.reset_index(inplace=True)
+    dfepi = pd.merge(dfepi, df1, on='EpiNum', how='left')
+    dfepi['QCode'].fillna(0, inplace=True)
+    dfepi['ClinicalTrialCPT'] = dfepi.QCode.apply(lambda x: np.sign(x))
+    dfepi['ClinicalTrialStatus'] = np.where((dfepi.ClinicalTrialFlag > 0.5) & (dfepi.ClinicalTrialCPT > 0.5), 'Both',
+                                            np.where((dfepi.ClinicalTrialFlag > 0.5) & (dfepi.ClinicalTrialCPT < 0.5),
+                                                     'Diag',
+                                                     np.where((dfepi.ClinicalTrialFlag < 0.5) & (
+                                                     dfepi.ClinicalTrialCPT > 0.5), 'CPT', 'None')))
+    dfepi.to_feather('Output/dfepi.feather')
+    return dfepi
+
+
+
 def addRegimen(dfdrugs, dfepi):
     '''
     This function adds a unique regimen ID to each episode.
@@ -920,7 +950,12 @@ def addRegimen(dfdrugs, dfepi):
            a) Keep only drugs that are first use during 4 weeks of the episode
         2) Open the xw_CPT2Regimen table
         3) Build a regimen overview table that has 2 fields: the regimen ID and the number of drugs in the regimen
-        4) Join the drug summary to the xw table described above
+        4) Join the drug summary to the xw table described above.  This now involves 2 steps, trying to match by CPT
+           and trying to match by GPI10. To do that, we go through the following steps:
+           a) Add the GPI10 to the xw dataframe.
+           b) Merge on CPT code.  When this is done, rename the resulting field.
+           c) Merge on GPI10.
+           d) If the drug matches either, keep the record.  Use drop_duplicates to get rid of double matches.
         5) Create and EpisodeRegimenSummary table that has 4 fields:
            a) EpiNum
            b) RegimenID
@@ -937,18 +972,33 @@ def addRegimen(dfdrugs, dfepi):
     :param dfepi: the episode summary dataframe
     :return: dfepi with the regimen information added
     '''
-    dfdrugs = dfdrugs[dfdrugs.DaysFromEpiStart<=28]
+    dfdrugs['DaysFromEpiStart'] = (dfdrugs.LineFromDate - dfdrugs.EpiStart) / np.timedelta64(1, 'D')
+    dfdrugs = dfdrugs[dfdrugs.DaysFromEpiStart<=42]
+    '''
+    dfdrugs['DrugName'] = dfdrugs.DrugName.apply(lambda x: str(x))
     dfdrugs['temp'] = dfdrugs.DrugName.str.split('[')
     dfdrugs['temp'] = dfdrugs.temp.apply(lambda x: x[1])
     dfdrugs['temp'] = dfdrugs.temp.apply(lambda x: x.replace(']', ''))
     dfdrugs['temp'] = dfdrugs.temp.apply(lambda x: x[:5].upper())
     dfdrugs.loc[dfdrugs.CPT=='J9999', 'CPT'] = dfdrugs.temp
     del dfdrugs['temp']
+    '''
     xw = Use('/AdvAnalytics/OCM/Reference/xw_CPT2Regimen')
+    xwg= Use('/AdvAnalytics/Reference/xw_CareproGenericName2GPI10')
+    xwg.drop_duplicates(inplace=True)
+    xw = pd.merge(xw, xwg, how='outer')
     dfrc = Use('/AdvAnalytics/OCM/Reference/info_RegimenDrugCount')
-    df = pd.merge(dfdrugs, xw, on='CPT', how='inner')
-    dfG = df.groupby(['EpiNum', 'Regimen', 'RegimenMedicationOrder'])
-    dfA = dfG.agg({'TotalPaid': {'RegimenPaid': 'sum',
+    df1 = pd.merge(dfdrugs, xw, on='CPT', how='inner')
+    df1 = df1[~df1.CPT.isin(['J8999', 'J9999'])]
+    df2 = pd.merge(dfdrugs, xw, on='GPI10', how='inner')
+    listCols = ['EpiNum', 'Regimen', 'RegimenMedicationOrder', 'LinePaid']
+    df1 = df1[listCols]
+    df2 = df2[listCols]
+    df = pd.concat([df1, df2])
+    df = df.groupby(['EpiNum', 'Regimen', 'RegimenMedicationOrder']).sum()
+    df.reset_index(inplace=True)
+    dfG = df.groupby(['EpiNum', 'Regimen'])
+    dfA = dfG.agg({'LinePaid': {'RegimenPaid': 'sum',
                                 'RegimenMeds': 'count'}})
     dfA = postAgg(dfA)
     dfA = pd.merge(dfA, dfrc, on='Regimen', how='left')
@@ -957,9 +1007,13 @@ def addRegimen(dfdrugs, dfepi):
     dfA['MedCountDiff'] = dfA.DrugCount - dfA.RegimenMeds
     dfA.sort_values(['EpiNum', 'MedCountDiff', 'DrugCount', 'RegimenPaid'],
         ascending=[1, 1, 0, 0], inplace=True)
+    #dfA.to_excel('c:/temp/regimenCheck.xlsx')
     dfA = dfA.groupby('EpiNum').first().reset_index()
     dfepi = pd.merge(dfepi, dfA, on='EpiNum', how='left')
+    xw = Use('/AdvAnalytics/OCM/Reference/code_regimen')
+    dfepi = pd.merge(dfepi, xw, how='left')
     return dfepi
+
 
 def addBenchmarks2dfepi(df):
     '''
@@ -1070,7 +1124,7 @@ def dfdrugsBuild(dfop, dfphy, dfdme, dfPartD, dfepi):
     # Should add drug costs and volumes
     dfepi = dfepi[['DeathDate', 'ZipCode', 'EpiNum', 'EpiStart', 'EpiEnd',
                    'CancerType', 'BaselinePrice', 'WinsorizedCost', 'AttributedPhysicianName']]
-    dfPartD = Use('Input/dfPartD.feather')
+    dfPartD = Use('Input/dfPartD')
     xw = Use('c:/AdvAnalytics/Reference/xw_HCPCS2NDC.feather')
     xw.rename(columns={'HCPCS': 'CPT'}, inplace=True)
     dfdme = dfdme[dfdme.NDC.notnull()]
@@ -1113,7 +1167,7 @@ def dfdrugsBuild(dfop, dfphy, dfdme, dfPartD, dfepi):
     del dfdrugs['NDC9']
     dfdrugs['MailOrderDrug'] = np.where(dfdrugs.DaysSupply > 35, 1., 0.)
     dfdrugs = pd.merge(dfdrugs, dfepi, on='EpiNum')
-    #Save(dfdrugs, Working + '/dfdrugs')
+    Save(dfdrugs, Working + '/dfdrugs')
     try:
         toMySQL(dfdrugs, 'ocm', 'dfdrugsDetail')
     except:
@@ -1159,8 +1213,8 @@ def build_dfie(dfop, dfip, dfiprev, dfepi):
                    and other information.
     '''
     dfiprev = Use('Input/dfiprev.feather')
-    dfip = Use('Input/dfip.feather')
-    dfop = Use('Input/dfop.feather')
+    dfip = Use('Input/dfip')
+    dfop = Use('Input/dfop')
     listCols = ['BeneSK', 'FromDate', 'ThruDate', 'CCN', 'AttendingNPI', 'Dx1', 'EpiNum',
                 'RevCode', 'RevCodeDate', 'CPT', 'LinePatientPaid', 'LinePaid']
     dfop = dfop[listCols]
@@ -1214,11 +1268,35 @@ def build_dfie(dfop, dfip, dfiprev, dfepi):
     return dfie
 
 
+def getHCCs(df, dfhcc):
+    xw = Use('/AdvAnalytics/Reference/xw_ICD9ToHCC')
+    d = df.copy()
+    for dx in ['Dx1', 'Dx2', 'Dx3', 'Dx4', 'Dx5']:
+        df2 = d[['EpiNum', dx]]
+        df2.rename(columns={dx: 'Dx'}, inplace=True)
+        df2 = pd.merge(df2, xw, on='Dx')
+        del df2['Dx']
+        dfhcc = pd.concat([df2, dfhcc])
+    return dfhcc
+
+
+def EpisodeHCCs(dfip, dfphyhead, dfophead):
+    dfhcc = pd.DataFrame({'EpiNum': [], 'HCC': []})
+    dfhcc = getHCCs(dfphyhead, dfhcc)
+    dfhcc = getHCCs(dfip, dfhcc)
+    dfhcc = getHCCs(dfophead, dfhcc)
+    dfhcc.drop_duplicates(inplace=True)
+    dfhcc['HCC'] = dfhcc.HCC.apply(lambda x: int(x))
+    ref = Use('/AdvAnalytics/OCM/Reference/ref_OCMHCC')
+    listHCCs = ref[ref['Used In OCM']=='Y'].HCC.tolist()
+    dfhcc = dfhcc[dfhcc.HCC.isin(listHCCs)]
+    dfhcc.to_feather('Output/dfhcc')
+
+
 ##################
 # Execution area #
 ##################
 createDirectories()
-'''
 dfepi = readEpi()
 Save(dfepi, InputFeather + '/dfepi')
 
@@ -1261,7 +1339,6 @@ print('Number of rows in OP header file after reading: ' + str(len(dfophead.inde
 print('Number of rows in OP line file after reading: ' + str(len(dfopline.index)))
 print('Number of rows in OP combined file after reading: ' + str(len(dfop.index)))
 print()
-'''
 
 dfphyhead, dfphyline, dfphy = readphy()
 print('Number of rows in phy header file after reading: ' + str(len(dfphyhead.index)))
@@ -1288,6 +1365,10 @@ dfPartB = combinePartB(dfop, dfphy, dfdme, dfepi)
 writeRadiologyFile(dfPartB)
 dfdrugs = dfdrugsBuild(dfop, dfphy, dfdme, dfPartD, dfepi)
 Save(dfdrugs, Output + '/dfdrugs')
+
+# Assessments for pricing model
+dfepi = assessClinicalTrial(dfop, dfphy, dfepi)
+EpisodeHCCs(dfip, dfphyhead, dfophead)
 
 # Write files for Power BI
 ip2PowerBI(dfip, dfepi)
