@@ -17,7 +17,7 @@ parser = lambda date: pd.datetime.strptime(date, '%d%b%Y')
 
 os.chdir('c:/AdvAnalytics/OCM/CCSI/BaselineUpdated')
 
-############################################
+############################################`
 ### General functions to read data files ###
 ############################################
 def createDirectories():
@@ -1012,6 +1012,8 @@ def addRegimen(dfdrugs, dfepi):
     dfepi = pd.merge(dfepi, dfA, on='EpiNum', how='left')
     xw = Use('/AdvAnalytics/OCM/Reference/code_regimen')
     dfepi = pd.merge(dfepi, xw, how='left')
+    dfepi.Regimen.fillna(-1, inplace=True)
+    dfepi['Regimen'] = dfepi.Regimen.apply(lambda x: int(x))
     return dfepi
 
 
@@ -1198,7 +1200,7 @@ def dfdrugsBuild(dfop, dfphy, dfdme, dfPartD, dfepi):
     Save(df1, Output + '/dfDrugTiming')
     #toMySQL(df1, 'ocm', 'dfDrugTiming')
     Save(dfA, 'Working/dfDrugSummary')
-    return dfA
+    return dfdrugs
 
 
 def build_dfie(dfop, dfip, dfiprev, dfepi):
@@ -1280,7 +1282,7 @@ def getHCCs(df, dfhcc):
     return dfhcc
 
 
-def EpisodeHCCs(dfip, dfphyhead, dfophead):
+def EpisodeHCCs(dfip, dfphyhead, dfophead, dfepi):
     dfhcc = pd.DataFrame({'EpiNum': [], 'HCC': []})
     dfhcc = getHCCs(dfphyhead, dfhcc)
     dfhcc = getHCCs(dfip, dfhcc)
@@ -1290,7 +1292,25 @@ def EpisodeHCCs(dfip, dfphyhead, dfophead):
     ref = Use('/AdvAnalytics/OCM/Reference/ref_OCMHCC')
     listHCCs = ref[ref['Used In OCM']=='Y'].HCC.tolist()
     dfhcc = dfhcc[dfhcc.HCC.isin(listHCCs)]
-    dfhcc.to_feather('Output/dfhcc')
+    dfepi = dfepi[['EpiNum', 'AttributedPhysicianName', 'CancerTypeDetailed', 'EpiStart']]
+    dfhcc=pd.merge(dfhcc, dfepi)
+    dfhcc['EpiNum'] = dfhcc.EpiNum.apply(lambda x: int(x))
+    print(dfhcc.info())
+    dfhcc.to_feather('Output/dfhcc.feather')
+
+
+def addTopDrug(dfdrugs, dfepi):
+    dfG=dfdrugs.groupby(['EpiNum', 'DrugName'])
+    dfA = dfG.agg({'LinePaid':{'EpisodePaid': 'sum'}})
+    dfA=postAgg(dfA)
+    dfA.sort_values(['EpiNum','EpisodePaid'], inplace=True)
+    dfA = dfA.groupby('EpiNum').tail(1)
+    dfA.reset_index(inplace=True)
+    dfA['EpiNum'] = dfA.EpiNum.apply(lambda x: int(x))
+    dfA = dfA[['EpiNum', 'DrugName']]
+    dfA.columns = ['EpiNum', 'MostExpensiveDrug']
+    dfepi = pd.merge(dfepi, dfA, how='left')
+    return dfepi
 
 
 ##################
@@ -1354,7 +1374,6 @@ dfepi = physicianAttribution(dfphy, ti, dfepi)
 dfepi = enhancedfepi(dfepi, dfop)
 dfepi = addBenchmarks2dfepi(dfepi)
 dfepi = addICU2Epi(dficu, dfepi)
-toMySQL(dfepi, 'ocm', 'dfepi')
 #diedOutsideEpisode(dfepi)
 
 build_dfie(dfop, dfip, dfiprev, dfepi)
@@ -1365,10 +1384,14 @@ dfPartB = combinePartB(dfop, dfphy, dfdme, dfepi)
 writeRadiologyFile(dfPartB)
 dfdrugs = dfdrugsBuild(dfop, dfphy, dfdme, dfPartD, dfepi)
 Save(dfdrugs, Output + '/dfdrugs')
+dfepi = addRegimen(dfdrugs, dfepi)
+toMySQL(dfepi, 'ocm', 'dfepi')
 
 # Assessments for pricing model
 dfepi = assessClinicalTrial(dfop, dfphy, dfepi)
-EpisodeHCCs(dfip, dfphyhead, dfophead)
+dfepi = addTopDrug(dfdrugs, dfepi)
+Save(dfepi, 'Output/dfepi')
+EpisodeHCCs(dfip, dfphyhead, dfophead, dfepi)
 
 # Write files for Power BI
 ip2PowerBI(dfip, dfepi)
