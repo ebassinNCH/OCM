@@ -5,7 +5,7 @@ library(tidyverse)
 library(ggthemes)
 library(plotly)
 library(DT)
-df = tibble( saveRate = seq(-15, 20, by=0.5) )
+df = tibble( saveRate = seq(7, 24, by=1) )
 fontTitle <- list(family='Droid Serif',
                   size=18,
                   color='#878787')
@@ -79,7 +79,7 @@ OutputTable <- function(df, headerCols) {
                   'ERVisitsPerEpisode'='ER Visits Per Episode',
                   'SavingsPercent'='Gross Savings Rate',
                   'SavingsPercentAfterDiscount'='Saving Rate After Discount',
-                  'TotalSavingsPaid'='$Gross Risk',
+                  'TotalSavingsPaid'='$PBP',
                   'PracticePaid'='$Practice Share',
                   'NCHPaid'='$NCH Share'
   )
@@ -125,9 +125,8 @@ OutputTable <- function(df, headerCols) {
   return(wrkTable)
 }
 
-
-# Define UI for application that draws a histogram
-ui <- fluidPage(theme=shinytheme('simplex'),
+# UI section ----
+ui <- fluidPage(theme=shinytheme('simplex'), 
    # Application title
    titlePanel("Risk Sharing Model"),
    
@@ -176,19 +175,19 @@ ui <- fluidPage(theme=shinytheme('simplex'),
                  sliderInput("Range1", label = h5("Initial Savings Range"), min = 0, step=0.5,
                              max = 20, value = c(0, 3))),
           column(4,
-                 numericInput('PracPct1', label=h5('% to Practice'), value=75, step=1))
+                 numericInput('PracPct1', label=h5('% to Practice'), value=80, step=1))
         ),
         fluidRow(
           column(8, 
                  sliderInput("Range2", label = h5("Middle Savings Range"), min = 0, 
-                             max = 20, step=.5, value = c(3, 8))),
+                             max = 20, step=.5, value = c(3, 20))),
           column(4,
-                 numericInput('PracPct2', label=h5('% to Practice'), value=25, step=1))
+                 numericInput('PracPct2', label=h5('% to Practice'), value=30, step=1))
         ),
         fluidRow(
           column(8, 
                  sliderInput("Range3", label = h5("Large Savings Range"), min = 0, 
-                             max = 20, step=.5, value = c(8,20))),
+                             max = 20, step=.5, value = c(20,20))),
           column(4,
                  numericInput('PracPct3', label=h5('% to Practice'), value=10, step=1))
         )
@@ -202,8 +201,8 @@ ui <- fluidPage(theme=shinytheme('simplex'),
                    title=HTML('<H3>Net Results Under Scenario</h3>'),
                    side='left', width=12,
                    selected='Summary Chart',
-                   tabPanel('Summary Chart', plotlyOutput('SummaryChart', height='680px')),
-                   tabPanel('Summary Table', DT::dataTableOutput('SummaryTable', height='680px'))
+                   tabPanel('Summary Chart', plotlyOutput('SummaryChart', height='580px')),
+                   tabPanel('Summary Table', DT::dataTableOutput('SummaryTable', height='580px'))
                  )
           )
         )
@@ -211,7 +210,7 @@ ui <- fluidPage(theme=shinytheme('simplex'),
    )
 )
 
-# Define server logic required to draw a histogram
+# Server Section ----
 server <- function(input, output) {
   output$SummaryChart <- renderPlotly( {
     cut1 = input$Range1[2]
@@ -229,6 +228,7 @@ server <- function(input, output) {
     LossPct3 = input$LossPracPct3
     df$EffPct = df$saveRate - input$Discount
     df = CalcCosts(df, cut1, cut2, losscut1, losscut2, MV, PS, Prem, Pct1, Pct2, Pct3, LossPct1, LossPct2, LossPct3)
+    #df$saveRate = df$saveRate+3
     plot_ly(df) %>% 
        add_trace(type='scatter', x=~saveRate, y=~PracticeNet, 
                  mode='lines', marker=list(color='#437ac0'), name='Practice',
@@ -278,7 +278,9 @@ server <- function(input, output) {
      LossPct3 = input$LossPracPct3
      df$EffPct = df$saveRate - input$Discount
      df = CalcCosts(df, cut1, cut2, losscut1, losscut2, MV, PS, Prem, Pct1, Pct2, Pct3, LossPct1, LossPct2, LossPct3)
-     df <- select(df, 'saveRate', 'EffPct', 'GrossResult', 'PracticeNet', 'NCHNet') %>% 
+     # df = filter(df, saveRate>7)
+     df$FeesPaid= 49000 + PS*0.001
+     df <- select(df, 'saveRate', 'FeesPaid', 'EffPct', 'GrossResult', 'PracticeNet', 'NCHNet') %>% 
        rename(
          'SavingsPercent'='saveRate',
          'SavingsPercentAfterDiscount'='EffPct',

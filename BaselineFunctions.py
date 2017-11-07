@@ -940,7 +940,6 @@ def assessClinicalTrial(dfop, dfphy, dfepi):
     return dfepi
 
 
-
 def addRegimen(dfdrugs, dfepi):
     '''
     This function adds a unique regimen ID to each episode.
@@ -1310,7 +1309,130 @@ def addTopDrug(dfdrugs, dfepi):
     dfA = dfA[['EpiNum', 'DrugName']]
     dfA.columns = ['EpiNum', 'MostExpensiveDrug']
     dfepi = pd.merge(dfepi, dfA, how='left')
+    listClass = ['Antineoplastic Agents']
+    dfdrugs = dfdrugs[dfdrugs.TherapeuticClassLevel1.isin(listClass)]
+    dfG=dfdrugs.groupby(['EpiNum', 'DrugName'])
+    dfA = dfG.agg({'LinePaid':{'EpisodePaid': 'sum'}})
+    dfA=postAgg(dfA)
+    dfA.sort_values(['EpiNum','EpisodePaid'], inplace=True)
+    dfA = dfA.groupby('EpiNum').tail(1)
+    dfA.reset_index(inplace=True)
+    dfA['EpiNum'] = dfA.EpiNum.apply(lambda x: int(x))
+    dfA = dfA[['EpiNum', 'DrugName']]
+    dfA.columns = ['EpiNum', 'MostExpensiveAntiCancerDrug']
+    dfepi = pd.merge(dfepi, dfA, how='left')
     return dfepi
+
+
+def computeEOLCostRange(df, startField, endField, prefix, dfdd, Cost='DailyPaid'):
+    # Kill 2 birds with one stone.  First, make sure that the DeathDate field is on the record.  Second,
+    # filter out claims from all episodes that do not end in patient death.
+    try:
+        del df['DeathDate']
+    except:
+        pass
+    df = pd.merge(df, dfdd, on='EpiNum')
+    # The logic here involves 3 scenarios, where the start/end date occurs within the "days window", where it occurs
+    # before the days window, and where it occurs after the days window.  I then compute the number of days
+    # that are relevant to the period.
+    newNames = ['EpiNum']
+    for md in range(10):
+        minDays = md * 3
+        maxDays = md * 3 + 2
+        df['startDays'] = (df.DeathDate - df[startField]) / np.timedelta64(1, 'D')
+        df['startDays'] = df.startDays.apply(lambda x: max(x, minDays))
+        df['startDays'] = df.startDays.apply(lambda x: min(x, maxDays))
+        df['endDays'] = (df.DeathDate - df[endField]) / np.timedelta64(1, 'D')
+        df['endDays'] = df.endDays.apply(lambda x: max(x, minDays))
+        df['endDays'] = df.endDays.apply(lambda x: min(x, maxDays))
+        df['xDays'] = df.startDays - df.endDays
+        newName = 'Paid' + str(maxDays) + 'Days'
+        df[newName] = df.xDays * df[Cost]
+        newNames.append(newName)
+    for c in ['startDays', 'endDays', 'xDays']:
+        del df[c]
+    dfw = df[newNames]
+    dfsum = dfw.groupby('EpiNum').sum()
+    dfsum.reset_index(inplace=True)
+    for c in list(dfsum.columns):
+        if c != 'EpiNum':
+            newc = prefix + c
+            dfsum.rename(columns={c: newc}, inplace=True)
+    return dfsum
+
+
+def computeEOLCostDate(df, dateField, dfdd, Cost='Paid', prefix='OP'):
+    # Kill 2 birds with one stone.  First, make sure that the DeathDate field is on the record.  Second,
+    # filter out claims from all episodes that do not end in patient death.
+    try:
+        del df['DeathDate']
+    except:
+        pass
+    df = pd.merge(df, dfdd, on='EpiNum')
+    newNames = ['EpiNum']
+    for md in range(10):
+        minDays = md * 3
+        maxDays = md * 3 + 2
+        df['xDays'] = (df.DeathDate - df[dateField]) / np.timedelta64(1, 'D')
+        df['xDays'] = np.where(df.xDays.between(minDays, maxDays), 1, 0)
+        newName = 'Paid' + str(maxDays) + 'Days'
+        df[newName] = df.xDays * df[Cost]
+        newNames.append(newName)
+    del df['xDays']
+    dfw = df[~df.DeathDate.isnull()]
+    dfw = dfw[newNames]
+    dfsum = dfw.groupby('EpiNum').sum()
+    dfsum.reset_index(inplace=True)
+    for c in list(dfsum.columns):
+        if c != 'EpiNum':
+            newc = prefix + c
+            dfsum.rename(columns={c: newc}, inplace=True)
+    return dfsum
+
+
+def EOLCostByDay(dfip, dfsnf, dfhha, dfhs, dfop, dfphy, dfPartD, dfdme, dfepi):
+    dfdied = dfepi[dfepi.DeathDate.between(dfepi.EpiStart, dfepi.EpiEnd)]
+    dfdd = dfdied[['EpiNum', 'DeathDate']]
+    dfip['DailyPaid'] = dfip.Paid / dfip.LOS
+    dfips = computeEOLCostRange(dfip, startField='AdmitDate', endField='DischargeDate', dfdd=dfdd, Cost='DailyPaid',
+                                prefix='IP')
+    dfsnf['DailyPaid'] = dfsnf.Paid / dfsnf.LOS
+    dfsnfs = computeEOLCostRange(dfsnf, startField='FromDate', endField='ThruDate', dfdd=dfdd, Cost='DailyPaid',
+                                 prefix='SNF')
+    dfhha['DailyPaid'] = dfhha.Paid / ((dfhha.ThruDate - dfhha.FromDate) / np.timedelta64(1, 'D'))
+    dfhhas = computeEOLCostRange(dfhha, startField='FromDate', endField='ThruDate', dfdd=dfdd, Cost='DailyPaid',
+                                 prefix='HHA')
+    dfhs['DailyPaid'] = dfhs.Paid / ((dfhs.ThruDate - dfhs.FromDate) / np.timedelta64(1, 'D'))
+    dfhss = computeEOLCostRange(dfhs, startField='FromDate', endField='ThruDate', dfdd=dfdd, Cost='DailyPaid',
+                                prefix='HS')
+    dfops = computeEOLCostDate(dfop, dateField='RevCodeDate', dfdd=dfdd, Cost='LinePaid', prefix='OP')
+    dfphys = computeEOLCostDate(dfphy, dateField='LineFromDate', dfdd=dfdd, Cost='LinePaid', prefix='Phy')
+    dfPartDs = computeEOLCostDate(dfPartD, dateField='ServiceDate', dfdd=dfdd, Cost='Paid', prefix='PartD')
+    dfdmes = computeEOLCostDate(dfdme, dateField='LineFromDate', dfdd=dfdd, Cost='LinePaid', prefix='DME')
+    dfdied = pd.merge(dfdied, dfips, how='left')
+    dfdied = pd.merge(dfdied, dfsnfs, how='left')
+    dfdied = pd.merge(dfdied, dfhhas, how='left')
+    dfdied = pd.merge(dfdied, dfhss, how='left')
+    dfdied = pd.merge(dfdied, dfops, how='left')
+    dfdied = pd.merge(dfdied, dfphys, how='left')
+    dfdied = pd.merge(dfdied, dfPartDs, how='left')
+    dfdied = pd.merge(dfdied, dfdmes, how='left')
+    for c in dfdied.columns.tolist():
+        if (c.endswith('Days')) & ('Paid' in c):
+            dfdied[c].fillna(0, inplace=True)
+    for md in range(10):
+        lp = str(md * 3 + 2)
+        dfdied['TotalPaid' + lp + 'Days'] = (dfdied['IPPaid' + lp + 'Days'] +
+                                             dfdied['SNFPaid' + lp + 'Days'] +
+                                             dfdied['HHAPaid' + lp + 'Days'] +
+                                             dfdied['HSPaid' + lp + 'Days'] +
+                                             dfdied['OPPaid' + lp + 'Days'] +
+                                             dfdied['PhyPaid' + lp + 'Days'] +
+                                             dfdied['PartDPaid' + lp + 'Days'] +
+                                             dfdied['DMEPaid' + lp + 'Days'])
+    dfdied['HospiceDaysGroup'] = pd.cut(dfdied.HospiceLOS, bins=[-99, 0, 2, 9, 999],
+                                          labels=['0 Days', '1-2 Days', '3-9 Days', '10+ Days'])
+    return dfdied
 
 
 ##################
@@ -1396,3 +1518,7 @@ EpisodeHCCs(dfip, dfphyhead, dfophead, dfepi)
 # Write files for Power BI
 ip2PowerBI(dfip, dfepi)
 dfcoef = readCoefficients()
+
+# Write info about end of life costs for dying patients
+dfdied = EOLCostByDay(dfip, dfsnf, dfhha, dfhs, dfop, dfphy, dfPartD, dfdme, dfepi)
+Save(dfdied, 'Output/dfdiedEOL')

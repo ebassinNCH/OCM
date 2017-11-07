@@ -250,6 +250,24 @@ def readphyQuarterly():
         xw.loc[xw.BETOS.isin(['P7A']), 'BETOSLevel3Group'] = 'RadOnc'
         xw.loc[xw.BETOS.isin(['T2A', 'T2B', 'T2C', 'T2D']), 'BETOSLevel3Group'] = 'Other'
         dfline = pd.merge(dfline, xw)
+        conn = pyodbc.connect('DRIVER={SQL Server};SERVER=BIDATACA2;DATABASE=EDW;UID=ebassin;\
+                               PWD=ebassin;Trusted_Connection=yes')
+        ## This section adds the 10 digit GPI code to the claim line where appropriate.
+        # Build the J Code to GPI crosswalk
+        myQuery = 'SELECT ServiceCode, NdcNumber FROM EDW.MSTR.AvgSalesPrice_NDC'
+        xw = pd.read_sql(myQuery, conn)
+        xw.columns = ['CPT', 'NDC']
+        xw['NDC'] = xw.NDC.apply(lambda x: x.replace('-', ''))
+        xw['NDC9'] = xw.NDC.apply(lambda x: x[:9])
+        del xw['NDC']
+        Save(xw, 'c:/temp/xw_CPT2NDC9')
+        dfline = pd.merge(dfline, xw, on='CPI', how='left')
+        xw = Use('/AdvAnalytics/Reference/ref_NDC')
+        xw['NDC9'] = xw.NDC.apply(lambda x: x[:9])
+        xw.GPI.fillna('MISSING', inplace=True)
+        xw['GPI10'] = xw.GPI.apply(lambda x: x[:10])
+        xw = xw[['NDC9', 'GPI10']]
+        dfline = pd.merge(dfline, xw, on='NDC9', how='left')
         Save(dfline, InputFeather + '/dfphyline')
     dfphy = pd.merge(dfline, dfhead)
     Save(dfphy, InputFeather + '/dfphy')
@@ -386,6 +404,20 @@ def readOPQuarterly():
                  'BETOSLevel3Group'] = 'Drugs'
         dfline.loc[(dfline.RevCode.between('0710', '0719')) & (dfline.BETOSLevel3Group == 'Other'),
                  'BETOSLevel3Group'] = 'Procedures'
+        # Add the GPI 10 to the claim line.  This section uses NDC if it exists and uses the J Code if the NDC
+        # does not exist.
+        xw = Use('c:/temp/xw_CPT2NDC9')
+        dfline = pd.merge(dfline, xw, on='CPI', how='left')
+        xw = Use('/AdvAnalytics/Reference/ref_NDC')
+        xw['NDC9'] = xw.NDC.apply(lambda x: x[:9])
+        xw.GPI.fillna('MISSING', inplace=True)
+        xw['GPI10'] = xw.GPI.apply(lambda x: x[:10])
+        xw = xw[['NDC9', 'GPI10']]
+        dfline = pd.merge(dfline, xw, on='NDC9', how='left')
+        dfline.rename(columns={'GPI10': 'GPICPT'}, inplace=True)
+        dfline['NDC9'] = dfline.NDC.apply(lambda x: x[:9])
+        dfline = pd.merge(dfline, xw, on='NDC9', how='left')
+        dfline.loc[dfline.GPI10.isnull(), 'GPI10'] = dfline.GPICPT
         Save(dfline, InputFeather + '/dfopline')
     dfop = pd.merge(dfhead, dfline)
     Save(dfop, InputFeather + '/dfop')

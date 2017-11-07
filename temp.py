@@ -6,7 +6,6 @@ import sys
 sys.path.append('c:/code/general')
 from NCHGeneral import *
 
-os.chdir('c:/AdvAnalytics/OCM/CCSI/QtrAggregate/Working')
-df = Use('dfbene')
-listBenes = pd.unique(df.BeneSK).tolist()
-print(len(listBenes))
+os.chdir('c:/AdvAnalytics/OCM/CCSI/BaselineUpdated')
+df = Use('Input/dfPartD')
+print(df.columns.tolist())
