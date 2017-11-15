@@ -389,3 +389,39 @@ histCost = function(df, df2, var, xtitle, barcolor='#8943c0', opaq=0.6, legname=
       bargap=0)
   return(pc)
 }
+
+pieTOS = function(df, opaq=0.8) {
+  dfpie <- select(df, "EpiStart", "EpiEnd", "CancerType", "Procs" = "PartBTOSPaidProcedures",
+                  "PartBDrugs"="PartBTOSPaidDrugs", "PartBTOSPaidImaging", "PartBTOSPaidLab",
+                  "E_M"="PartBTOSPaidE&M", "PartBTOSPaidOther", "PartBTOSPaidChemo", 
+                  "RadOnc"="PartBTOSPaidRadOnc", "PartBTOSPaidDME", "PartBTOSPaidEmerg",
+                  "Inpat"="IPTotalPaid", "SNFPaid", "HHAPaid", "Hospice"="HospicePaid", "PartDChemoPaid", 
+                  "PartDNonChemoPaid", "DMEDrugPaid", "DMENonDrugPaid", "AttributedPhysicianName")
+  dfpie <- dfpie %>% na.omit()
+  dfpie <- dfpie %>% as_tibble() %>% mutate(
+    PartBDrugs = PartBDrugs + DMEDrugPaid + PartBTOSPaidChemo,
+    Testing = PartBTOSPaidLab + PartBTOSPaidImaging,
+    Other = PartBTOSPaidEmerg + PartBTOSPaidDME + PartBTOSPaidOther + DMENonDrugPaid,
+    PostAcute = SNFPaid + HHAPaid,
+    Orals = PartDChemoPaid + PartDNonChemoPaid)
+  dropCols = c("DMEDrugPaid", "PartBTOSPaidDME", "PartBTOSPaidChemo",
+               "PartBTOSPaidImaging", "PartBTOSPaidEmerg", "PartBTOSPaidLab", "DMENonDrugPaid",
+               "PartBTOSPaidOther", "SNFPaid", "HHAPaid", "PartDChemoPaid", "PartDNonChemoPaid")
+  dfpie <- dfpie %>% dplyr::select(-one_of(dropCols))
+  dfpie <- dfpie %>% replace_na(list(Procs=0, PartBDrugs=0, Inpat=0, Hospice=0, Testing=0, 
+                                     Other=0, PostAcute=0, Orals=0, E_M=0, RadOnc=0))
+  dfpie2 <- gather(dfpie, key=CostType, value=AmountPaid, 
+                   Procs, PartBDrugs, Inpat, Hospice, Testing, Other, PostAcute, Orals, E_M, RadOnc)
+  dfpie2 <- dfpie2 %>% group_by(CostType) %>% summarize(AmountPaid = mean(AmountPaid))
+  dfTOSColors = read_feather('/AdvAnalytics/OCM/Reference/dfTOSColors.feather')
+  dfpie2 = merge(dfpie2, dfTOSColors)
+  p = plot_ly(dfpie2, labels=~CostType, values=~AmountPaid, type='pie', opacity=opaq,
+            textposition='inside', textinfo='label+percent',
+            text=~paste('$', AmountPaid), hoverinfo='text', rotation=90, 
+            textfont=list(color='white', family='Balto', size=13),
+            marker=list(colors=~TOSColor,
+                        line=list(width=0)),
+            showlegend=FALSE)
+  return(p)
+}
+

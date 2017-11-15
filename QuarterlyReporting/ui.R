@@ -247,7 +247,7 @@ ui <- dashboardPage(
                 #### Outlier Tab ####
                 tabPanel('Outliers',
                          tabBox(title=HTML('<H3>Outlier Episodes</h3>'),
-                                side='left', width=12, selected='Chart',
+                                side='left', width=12, selected='Chart', height='780px',
                                 tabPanel('Chart', plotlyOutput('OutlierBar')),
                                 tabPanel('Patient List', DT::dataTableOutput('OutlierTable'))
                          )
@@ -256,8 +256,11 @@ ui <- dashboardPage(
                 tabPanel('Type of Service',
                          column(3,
                                 box(solidHeader=FALSE, title='Type of Service Summary',
-                                    status='primary', width=NULL,
-                                    plotlyOutput('TOSPie')
+                                    status='primary', width=NULL, height='800px',
+                                    HTML('<H5>Performance Period</H5>'),
+                                    plotlyOutput('TOSPie'), 
+                                    HTML('<HR><H5>Baseline Period</H5>'),
+                                    plotlyOutput('TOSPie2') 
                                 )
                          ),
                          column(9, 

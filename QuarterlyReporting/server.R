@@ -911,7 +911,8 @@ server <- function(input, output) {
   #### Outliers Tab ####
   output$OutlierBar <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfbb <- aggQuality(df=dfep, var='IsOutlier', grp=input$TOSGroupBy)
+    dfepB <-filterdfepi(dfepiB)
+    dfbb <- aggQuality(df=dfep, dfB=dfepB, var='IsOutlier', grp=input$TOSGroupBy)
     ob <- barVsBenchmark(dfbb, var='IsOutlier', grp=input$TOSGroupBy, 
                          color='#c0437a', xlabel='% of Episodes')
     ob
@@ -920,7 +921,7 @@ server <- function(input, output) {
     dfep <- filterdfepi(dfepi)  %>% filter(IsOutlier>=1)
     dfep <- arrange(dfep, desc(OutlierPaid)) %>% 
       select(EpiNum, PatientName, CancerType, AttributedPhysicianName,
-             EpiStart, ActualCost, BaselinePrice, IPTotalPaid, DrugPaid)
+             EpiStart, ActualCost, IPTotalPaid, DrugPaid)
     outTab <- OutputTable(dfep, headerCols = c('EpiNum', 'PatientName')) 
     outTab
   })
@@ -929,15 +930,13 @@ server <- function(input, output) {
     grpVar <- input$TOSGroupBy
     srtVar <- input$TOSSortBy
     dfep <- filterdfepi(dfepi)
-    dftos <- select(dfep, "Sex", "Age", "DeathDate", "ZipCode", "EpiNum", 'ActualCost',
-                    "EpiStart", "EpiEnd", "CancerTypeDetailed", "ReconciliationEligible",
-                    "BaselinePrice", "PatientName", "Procs" = "PartBTOSPaidProcedures",
+    dftos <- select(dfep, 'ActualCost', "EpiStart", "EpiEnd", "CancerType", 
+                    "Procs" = "PartBTOSPaidProcedures",
                     "PartBDrugs"="PartBTOSPaidDrugs", "PartBTOSPaidImaging", "PartBTOSPaidLab",
                     "E_M"="PartBTOSPaidE&M", "PartBTOSPaidOther", "PartBTOSPaidChemo", 
                     "RadOnc"="PartBTOSPaidRadOnc", "PartBTOSPaidDME", "PartBTOSPaidEmerg",
                     "Inpat"="IPTotalPaid", "SNFPaid", "HHAPaid", "Hospice"="HospicePaid", "PartDChemoPaid", 
-                    "PartDNonChemoPaid", "DMEDrugPaid", "DMENonDrugPaid", "AttributedPhysicianName",
-                    "NumberHCCs")
+                    "PartDNonChemoPaid", "DMEDrugPaid", "DMENonDrugPaid", "AttributedPhysicianName")
     dftos <- dftos %>% as_tibble() %>% mutate(
       PartBDrugs = PartBDrugs + DMEDrugPaid + PartBTOSPaidChemo,
       Testing = PartBTOSPaidLab + PartBTOSPaidImaging,
@@ -1070,40 +1069,11 @@ server <- function(input, output) {
   }) # close TOSstack
   output$TOSPie <- renderPlotly( { 
     dfep = filterdfepi(dfepi)
-    dfpie <- select(dfep, "Sex", "Age", "DeathDate", "ZipCode", "EpiNum", 
-                    "EpiStart", "EpiEnd", "CancerType", "ReconciliationEligible",
-                    "BaselinePrice", "PatientName", "Procs" = "PartBTOSPaidProcedures",
-                    "PartBDrugs"="PartBTOSPaidDrugs", "PartBTOSPaidImaging", "PartBTOSPaidLab",
-                    "E_M"="PartBTOSPaidE&M", "PartBTOSPaidOther", "PartBTOSPaidChemo", 
-                    "RadOnc"="PartBTOSPaidRadOnc", "PartBTOSPaidDME", "PartBTOSPaidEmerg",
-                    "Inpat"="IPTotalPaid", "SNFPaid", "HHAPaid", "Hospice"="HospicePaid", "PartDChemoPaid", 
-                    "PartDNonChemoPaid", "DMEDrugPaid", "DMENonDrugPaid", "AttributedPhysicianName",
-                    "NumberHCCs")
-    dfpie <- dfpie %>% na.omit()
-    dfpie <- dfpie %>% as_tibble() %>% mutate(
-      PartBDrugs = PartBDrugs + DMEDrugPaid + PartBTOSPaidChemo,
-      Testing = PartBTOSPaidLab + PartBTOSPaidImaging,
-      Other = PartBTOSPaidEmerg + PartBTOSPaidDME + PartBTOSPaidOther + DMENonDrugPaid,
-      PostAcute = SNFPaid + HHAPaid,
-      Orals = PartDChemoPaid + PartDNonChemoPaid
-    )
-    dropCols = c("DMEDrugPaid", "PartBTOSPaidDME", "PartBTOSPaidChemo",
-                 "PartBTOSPaidImaging", "PartBTOSPaidEmerg", "PartBTOSPaidLab", "DMENonDrugPaid",
-                 "PartBTOSPaidOther", "SNFPaid", "HHAPaid", "PartDChemoPaid", "PartDNonChemoPaid")
-    dfpie <- dfpie %>% dplyr::select(-one_of(dropCols))
-    dfpie <- dfpie %>% replace_na(list(Procs=0, PartBDrugs=0, Inpat=0, Hospice=0, Testing=0, 
-                                       Other=0, PostAcute=0, Orals=0, E_M=0, RadOnc=0))
-    dfpie2 <- gather(dfpie, key=CostType, value=AmountPaid, 
-                     Procs, PartBDrugs, Inpat, Hospice, Testing, Other, PostAcute, Orals, E_M, RadOnc)
-    dfpie2 <- dfpie2 %>% group_by(CostType) %>% summarize(AmountPaid = mean(AmountPaid))
-    colors <- colorRampPalette(brewer.pal(8, 'Set2'))(10)
-    plot_ly(dfpie2, labels=~CostType, values=~AmountPaid, type='pie', opacity=.9,
-            textposition='inside', textinfo='label+percent',
-            text=~paste('$', AmountPaid), hoverinfo='text', rotation=90, 
-            textfont=list(color='white', family='Balto', size=13),
-            marker=list(color=colors,
-                        line=list(width=0)),
-            showlegend=FALSE)
+    pieTOS(df=dfep, opaq=0.7) 
+  })
+  output$TOSPie2 <- renderPlotly( {
+    dfepB = filterdfepi(dfepiB)
+    pieTOS(df=dfepB, opaq=0.5)
   }) # close TOSPie
   
   #### ER Tab Outputs ####
