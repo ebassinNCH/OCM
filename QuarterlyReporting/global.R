@@ -241,9 +241,11 @@ countyMap <- function(dfwc, dfName, Var, varlabel, digits=0, palette='RdYlGn') {
   return(myMap)
 }
 
-aggQuality <- function(df, var, grp) {
+aggQuality <- function(df, dfB, var, grp) {
   names(df)[names(df) == grp] <- 'gV'
   names(df)[names(df) == var] <- 'sV'
+  names(dfB)[names(dfB) == grp] <- 'gV'
+  names(dfB)[names(dfB) == var] <- 'sV'
   dfb <- df  %>%  
     group_by(CancerTypeDetailed) %>%
     summarise( Measurebenchmark=mean(sV))
@@ -254,15 +256,22 @@ aggQuality <- function(df, var, grp) {
       YourScore = mean(sV),
       Benchmark = mean(Measurebenchmark),
       Episodes=n())
+  dfB = dfB %>% group_by(gV) %>% 
+    summarise(
+      Baseline = mean(sV),
+      BaselineEpisodes=n())
+  dfb = merge(dfb, dfB, by='gV', all.x=TRUE)
+  dfb = dfb %>% 
+    mutate(Baseline = ifelse(is.na(Baseline), 0, Baseline),
+           BaselineEpisodes = ifelse(is.na(BaselineEpisodes), 0, BaselineEpisodes))
   if ( (max(dfb$YourScore)<=1)  & (min(dfb$YourScore)>=0) ) {
     dfb <- mutate(dfb, 
                   YourScore = YourScore * 100,
-                  Benchmark = Benchmark * 100)
+                  Benchmark = Benchmark * 100,
+                  Baseline = Baseline * 100)
   }
-  print(names(dfb))
   names(dfb)[names(dfb)=='YourScore'] <- var
   names(dfb)[names(dfb)=='gV'] <- grp
-  print(names(dfb))
   return(dfb)
 }
 
@@ -274,7 +283,11 @@ barVsBenchmark <- function(df, var, grp, color='#7ac043', xlabel='') {
               hovertext=~paste(substitute(y, list(y=as.name(grp))), '<br>', Episodes, 'Episodes'),
               hoverinfo='text', 
               text=eval(substitute(~round(x,0), list(x=as.name(var)))), textposition='auto', textfont=list(color='white')) %>% 
-    add_trace(x=~Benchmark, name='$Benchmark', marker=list(color=color), type='bar', opacity=0.4,
+    add_trace(x=~Benchmark, name='Benchmark', marker=list(color=color), type='bar', opacity=0.4,
+              hovertext=~paste(eval(substitute(y, list(y=as.name(grp)))), 
+                               '<br>', Episodes, 'Episodes'),
+              hoverinfo='text', text=~round(Benchmark,0), textposition='auto') %>% 
+    add_trace(x=~Baseline, name='Baseline', marker=list(color=color), type='bar', opacity=0.25,
               hovertext=~paste(eval(substitute(y, list(y=as.name(grp)))), 
                                '<br>', Episodes, 'Episodes'),
               hoverinfo='text', text=~round(Benchmark,0), textposition='auto') %>% 

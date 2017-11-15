@@ -68,22 +68,28 @@ ui <- dashboardPage(
                                   box(solidHeader=TRUE, title='Claims-Based Quality Measures',
                                       status='success', width=NULL,
                                       HTML('<h4><CENTER>% Patients with 3+ Days of Hospice</CENTER></h4>'),
-                                      plotlyOutput('dotHospice', height='160px'),
+                                      plotlyOutput('dotHospice', height='130px'),
                                       HTML('<HR><h4><CENTER>% of Episodes with Admissions</CENTER></h4>'),
-                                      plotlyOutput('dotAdmit', height='160px'),
+                                      plotlyOutput('dotAdmit', height='130px'),
                                       HTML('<HR><H4><Center>% of Episodes with ER Visits</center></h4>'),
-                                      plotlyOutput('dotER', height='160px')
+                                      plotlyOutput('dotER', height='130px')
                                   )
                            )
                          )
                 ), # close tabPanel
                 #### Quality Tab ####
                 tabPanel('Quality',
-                         fluidRow(column(3, HTML('</H4>All Episodes</H4>')),
+                         fluidRow(column(3, HTML('<H4><i>All Episodes, Perf. Period</i></H4>')),
                                   valueBoxOutput('ValueQualityIP', width=2),
                                   valueBoxOutput('ValueQualityER', width=2),
                                   valueBoxOutput('ValueQualityMort', width=2),
                                   valueBoxOutput('ValueQualityICU', width=2)
+                         ),
+                         fluidRow(column(3, HTML('<H4><i>Baseline Period</i></H4>')),
+                                  valueBoxOutput('ValueQualityIPB', width=2),
+                                  valueBoxOutput('ValueQualityERB', width=2),
+                                  valueBoxOutput('ValueQualityMortB', width=2),
+                                  valueBoxOutput('ValueQualityICUB', width=2)
                          ),
                          fluidRow(column(3, HTML('<H4>Select variable to report:</h4>')),
                                   column(2, selectInput('Qmeasure1', label=NULL,
@@ -106,10 +112,15 @@ ui <- dashboardPage(
                                        plotlyOutput('Quality2', height='500px'))
                          )
                          ),
-                         fluidRow(column(3, HTML('<H4>Episodes Ending in Death</H4>')),
+                         fluidRow(column(3, HTML('<H4><i>Episodes Ending in Death</i></H4>')),
                                   valueBoxOutput('ValueQualityOCM3', width=3),
                                   valueBoxOutput('ValueQuality14Admit', width=3),
                                   valueBoxOutput('ValueQualityEOLICU', width=3)
+                         ),
+                         fluidRow(column(3, HTML('<H4><i>         Baseline Period</i></H4>')),
+                                  valueBoxOutput('ValueQualityOCM3B', width=3),
+                                  valueBoxOutput('ValueQuality14AdmitB', width=3),
+                                  valueBoxOutput('ValueQualityEOLICUB', width=3)
                          ),
                          fluidRow(column(3, HTML('<H4>Select variable to report:</h4>')),
                                   column(2, selectInput('Qmeasure3', label=NULL,
@@ -205,34 +216,34 @@ ui <- dashboardPage(
                          )
                 ), # close tabPanel for Price model
                 #### Pricing Factors Tab ####
-                tabPanel('Pricing Factors', 
-                         fluidRow(
-                           column(6, 
-                                  box(solidHeader=FALSE, title='Clinical Trial Coding',
-                                      status='primary', width=NULL,
-                                      plotlyOutput('TrialsStacked', height='570px') )
-                           ),
-                           column(6, 
-                                  box(solidHeader=FALSE, title='HCC Coding',
-                                      status='primary', width=NULL,
-                                      plotlyOutput('HCCChart', height='570px') )
-                           )
-                         )
-                         ,
-                         fluidRow(
-                           column(6,
-                                  box(solidHeader=FALSE, title='Patients in Clinical Trials',
-                                      status='primary', width=NULL,
-                                      DT::dataTableOutput('TableTrials', height='570px') 
-                                  )
-                           ),
-                           column(6, 
-                                  box(solidHeader=FALSE, title='Drug Clean Periods',
-                                      status='primary', width=NULL,
-                                      plotlyOutput('CleanPeriod', height='570px'))
-                           )
-                         )
-                ),
+                # tabPanel('Pricing Factors', 
+                #          fluidRow(
+                #            column(6, 
+                #                   box(solidHeader=FALSE, title='Clinical Trial Coding',
+                #                       status='primary', width=NULL,
+                #                       plotlyOutput('TrialsStacked', height='570px') )
+                #            ),
+                #            column(6, 
+                #                   box(solidHeader=FALSE, title='HCC Coding',
+                #                       status='primary', width=NULL,
+                #                       plotlyOutput('HCCChart', height='570px') )
+                #            )
+                #          )
+                #          ,
+                #          fluidRow(
+                #            column(6,
+                #                   box(solidHeader=FALSE, title='Patients in Clinical Trials',
+                #                       status='primary', width=NULL,
+                #                       DT::dataTableOutput('TableTrials', height='570px') 
+                #                   )
+                #            ),
+                #            column(6, 
+                #                   box(solidHeader=FALSE, title='Drug Clean Periods',
+                #                       status='primary', width=NULL,
+                #                       plotlyOutput('CleanPeriod', height='570px'))
+                #            )
+                #          )
+                # ),
                 #### Outlier Tab ####
                 tabPanel('Outliers',
                          tabBox(title=HTML('<H3>Outlier Episodes</h3>'),

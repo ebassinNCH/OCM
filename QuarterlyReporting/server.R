@@ -116,7 +116,7 @@ server <- function(input, output) {
   output$ValueUniquePatientsB <- renderValueBox( {
     dfep <- filterdfepi(dfepiB)
     UniquePats <- length(unique(dfep$BeneSK))
-    valueBox(value=UniquePats, subtitle='# of Patients', color='light-blue', icon=icon('venus-marsr'))
+    valueBox(value=UniquePats, subtitle='# of Patients', color='light-blue', icon=icon('venus-mars'))
   })
   output$ValueMeanAgeB <- renderValueBox( {
     dfep <- filterdfepi(dfepiB)
@@ -182,14 +182,14 @@ server <- function(input, output) {
     dfdied = select(dfdied, AttributedPhysicianName, HospicePassOCM3, Period)
     dfdiedB= select(dfdiedB,AttributedPhysicianName, HospicePassOCM3, Period)
     dfdied = rbind(dfdied, dfdiedB)
-    dfdied = me(dfdied, dfPhysColor)
+    dfdied = merge(dfdied, dfPhysColor)
     dfOCM3 <- dfdied %>% 
       group_by(AttributedPhysicianName, PhysicianColor, Period) %>% 
       summarise(
         Deaths=n(),
         ComplianceRate=mean(HospicePassOCM3)
       )
-    dfOCM3$DeathSize = round(sqrt(dfOCM3$Deaths*3, 0))
+    dfOCM3$DeathSize = round(sqrt(dfOCM3$Deaths*3), 0)
     dfOCM3 = merge(dfOCM3, dfPhysColor, all.x=TRUE)
     dfOCM3$ComplianceRate = dfOCM3$ComplianceRate*100
     plot_ly(dfOCM3,
@@ -201,15 +201,15 @@ server <- function(input, output) {
             text=~paste('Provider: ', AttributedPhysicianName, '   Deaths', Deaths,
                         '   Hospice Rate', round(ComplianceRate,1), '%'),
             hoverinfo='text',
-            height=150) %>%
+            height=120) %>%
       layout( 
-        xaxis=list(title='% of Deaths with 3+ Days Hospice', 
+        xaxis=list(title='', 
                    showticklabels=TRUE,  
                    titlefont=font1, 
                    tickfont=font2,
                    separatethousands=TRUE, zeroline=FALSE), 
-        yaxis=list(showgrid=FALSE, gridwidth=1, gridcolor='#f9f9f9',
-                   showticklabels=FALSE),
+        yaxis=list(showgrid=FALSE, gridwidth=1, gridcolor='#f9f9f9', title='',
+                   showticklabels=TRUE),
         showlegend=FALSE)
   } )  
   output$dotSavings <- renderPlotly( {
@@ -268,17 +268,16 @@ server <- function(input, output) {
             text=~paste(AttributedPhysicianName, '   Episodes:', Episodes,
                         '   Admit Rate', round(AdmitRate,1), '%'),
             hoverinfo='text',
-            height=150) %>%
+            height=120) %>%
       layout(
-        xaxis=list(title='% of Episodes with 1+ Admissions', 
+        xaxis=list(title='', 
                    showticklabels=TRUE,  
                    titlefont=font1, 
                    tickfont=font2,
                    separatethousands=TRUE, 
                    zeroline=FALSE), 
-        yaxis=list(showgrid=FALSE, gridwidth=1, gridcolor='#f9f9f9', title='',
-                   #showticklabels=FALSE,
-                   labels = c('Baseline', 'Quarter')),
+        yaxis=list(showgrid=FALSE, gridwidth=1, gridcolor='#f9f9f9', title=''),
+                   #showticklabels=FALSE),
         showlegend=FALSE)
   })  
   output$dotER <- renderPlotly( {
@@ -306,9 +305,9 @@ server <- function(input, output) {
             text=~paste(AttributedPhysicianName, '   Episodes:', Episodes,
                         '   ER Visit Rate', round(AdmitRate,1), '%'),
             hoverinfo='text',
-            height=150) %>%
+            height=120) %>%
       layout(
-        xaxis=list(title='% of Episodes with 1+ ER Visits', 
+        xaxis=list(title='', 
                    showticklabels=TRUE,  
                    titlefont=font1, 
                    tickfont=font2,
@@ -450,20 +449,20 @@ server <- function(input, output) {
     dfepdie <- filterdfepi(dfepi)
     dfepdie <- filter(dfepdie, DiedDuringEpisode>0.4)
     OCM3 <- paste0(round(mean(dfepdie$HospicePassOCM3),3) * 100,'%')
-    infoBox(value=OCM3, title='OCM-3: % w/ 3+ Hospice Days', color='yellow', icon=icon('hospital-o'))
+    infoBox(value=OCM3, title='OCM-3: % w/ 3+ Hospice Days', color='green', icon=icon('hospital-o'))
   })
   output$ValueQuality14Admit <- renderInfoBox( {
     dfepdie <- filterdfepi(dfepi)
     dfepdie <- filter(dfepdie, DiedDuringEpisode>0.4)
     Admit14 <- paste0(round(mean(dfepdie$AdmitLast14Days),3) * 100, '%')
-    infoBox(value=Admit14, title='% Admitted Last 14 Days', color='yellow', icon=icon('h-square'))
+    infoBox(value=Admit14, title='% Admitted Last 14 Days', color='green', icon=icon('h-square'))
   })
   output$ValueQualityEOLICU <- renderInfoBox( {
     dfepdie <- filterdfepi(dfepi)
     dfepdie <- filter(dfepdie, DiedDuringEpisode>0.4)
     ICU14 <- paste0(round(mean(dfepdie$ICULast14Days*100),1), '%')
     print(ICU14)
-    infoBox(value=ICU14, title='% in ICU in Last 14 Days', color='yellow', icon=icon('bed'))
+    infoBox(value=ICU14, title='% in ICU in Last 14 Days', color='green', icon=icon('bed'))
   })
   output$ValueQualityIPB <- renderValueBox( {
     dfep <- filterdfepi(dfepiB)
@@ -489,32 +488,34 @@ server <- function(input, output) {
     dfepdie <- filterdfepi(dfepiB)
     dfepdie <- filter(dfepdie, DiedDuringEpisode>0.4)
     OCM3 <- paste0(round(mean(dfepdie$HospicePassOCM3),3) * 100,'%')
-    infoBox(value=OCM3, title='OCM-3: % w/ 3+ Hospice Days', color='yellow', icon=icon('hospital-o'))
+    infoBox(value=OCM3, title='OCM-3: % w/ 3+ Hospice Days', color='light-blue', icon=icon('hospital-o'))
   })
   output$ValueQuality14AdmitB <- renderInfoBox( {
     dfepdie <- filterdfepi(dfepiB)
     dfepdie <- filter(dfepdie, DiedDuringEpisode>0.4)
     Admit14 <- paste0(round(mean(dfepdie$AdmitLast14Days),3) * 100, '%')
-    infoBox(value=Admit14, title='% Admitted Last 14 Days', color='yellow', icon=icon('h-square'))
+    infoBox(value=Admit14, title='% Admitted Last 14 Days', color='light-blue', icon=icon('h-square'))
   })
   output$ValueQualityEOLICUB <- renderInfoBox( {
     dfepdie <- filterdfepi(dfepiB)
     dfepdie <- filter(dfepdie, DiedDuringEpisode>0.4)
     ICU14 <- paste0(round(mean(dfepdie$ICULast14Days*100),1), '%')
-    infoBox(value=ICU14, title='% in ICU in Last 14 Days', color='yellow', icon=icon('bed'))
+    infoBox(value=ICU14, title='% in ICU in Last 14 Days', color='light-blue', icon=icon('bed'))
   })
   output$Quality1 <- renderPlotly( { 
     dfep <- filterdfepi(dfepi)
+    dfepB <- filterdfepi(dfepiB)
     xtitle <- titleQuality(input$Qmeasure1)
-    dfb <- aggQuality(df=dfep, var=input$Qmeasure1, grp=input$TOSGroupBy)
+    dfb <- aggQuality(df=dfep, dfB=dfepB, var=input$Qmeasure1, grp=input$TOSGroupBy)
     bc <- barVsBenchmark(dfb, var=input$Qmeasure1, grp=input$TOSGroupBy, 
                          color='#7ac043', xlabel=xtitle)
     bc
   })
   output$Quality2 <- renderPlotly( { 
     dfep <- filterdfepi(dfepi)
+    dfepB <- filterdfepi(dfepiB)
     xtitle <- titleQuality(input$Qmeasure2)
-    dfb <- aggQuality(df=dfep, var=input$Qmeasure2, grp=input$TOSGroupBy)
+    dfb <- aggQuality(df=dfep, dfB=dfepB, var=input$Qmeasure2, grp=input$TOSGroupBy)
     bc2 <- barVsBenchmark(dfb, var=input$Qmeasure2, grp=input$TOSGroupBy, 
                           color='#c08943', xlabel=xtitle)
     bc2
@@ -522,8 +523,10 @@ server <- function(input, output) {
   output$Quality3 <- renderPlotly( { 
     dfepdie <- filterdfepi(dfepi)
     dfepdie <- filter(dfepdie, DiedDuringEpisode>0.4)
+    dfepdieB <- filterdfepi(dfepiB)
+    dfepdieB <- filter(dfepdieB, DiedDuringEpisode>0.4)
     xtitle <- titleQuality(input$Qmeasure3)
-    dfb <- aggQuality(df=dfepdie, var=input$Qmeasure3, grp=input$TOSGroupBy)
+    dfb <- aggQuality(df=dfepdie, dfB=dfepdieB, var=input$Qmeasure3, grp=input$TOSGroupBy)
     bc3 <- barVsBenchmark(dfb, var=input$Qmeasure3, grp=input$TOSGroupBy, 
                           color='#437ac0', xlabel=xtitle)
     bc3
@@ -531,9 +534,10 @@ server <- function(input, output) {
   output$Quality4 <- renderPlotly( { 
     dfepdie <- filterdfepi(dfepi)
     dfepdie <- filter(dfepdie, DiedDuringEpisode>0.4)
+    dfepdieB <- filterdfepi(dfepiB)
+    dfepdieB <- filter(dfepdieB, DiedDuringEpisode>0.4)
     xtitle <- titleQuality(input$Qmeasure4)
-    print(xtitle)
-    dfbd <- aggQuality(df=dfepdie, var=input$Qmeasure4, grp=input$TOSGroupBy)
+    dfbd <- aggQuality(df=dfepdie, dfB=dfepdieB, var=input$Qmeasure4, grp=input$TOSGroupBy)
     bc4 <-  barVsBenchmark(dfbd, var=input$Qmeasure4, grp=input$TOSGroupBy, 
                            color='#8943c0', xlabel=xtitle)
     bc4
@@ -542,24 +546,24 @@ server <- function(input, output) {
   
   #### Pricing Tab Outputs ####
   output$IBEpis <- renderInfoBox( {
-    dfep <- filterdfepi(dfepi)
+    dfep <- filterdfepi(dfepiB)
     Episodes = nrow(dfep)
     infoBox('# of Episodes', value=Episodes, color='light-blue', fill=TRUE, width=4, 
             icon=icon('hand-left', lib='glyphicon'))
   })
   output$IBPrice <- renderInfoBox( {
-    dfep <- filterdfepi(dfepi)
+    dfep <- filterdfepi(dfepiB)
     infoBox('Total Target Price', 
             value=paste('$', round(sum(dfep$BaselinePrice)/1e6,1), 'M'), 
             color='light-blue', fill=TRUE, width=4, icon=icon('bullseye'))
   })  
   output$IBWinsor <- renderInfoBox( {
-    dfep <- filterdfepi(dfepi)
+    dfep <- filterdfepi(dfepiB)
     infoBox('$Winsorized Spend', value=paste('$', round(sum(dfep$WinsorizedCost)/1e6,1), 'M'), 
             color='light-blue', fill=TRUE, width=4, icon=icon('usd'))
   })  
   output$priceCTSum <- renderPlotly( {
-    dfep <- filterdfepi(dfepi)
+    dfep <- filterdfepi(dfepiB)
     dfprice <- dfep %>% group_by(CancerTypeDetailed) %>% summarize(
       Episodes=n(),
       MeanPrice=round(mean(BaselinePrice),0),
@@ -605,7 +609,7 @@ server <- function(input, output) {
                titlefont=fontNarrow)
   } ) # close PriceCTSum
   output$histPrice <- renderPlotly( {
-    dfep <- filterdfepi(dfepi)
+    dfep <- filterdfepi(dfepiB)
     # target price distribution
     bp = dfep$BaselinePrice
     maxPrice = max(bp)
@@ -633,7 +637,7 @@ server <- function(input, output) {
         bargap=0)
   } )
   output$PriceScatter <- renderPlotly( {
-    dfep <- filterdfepi(dfepi)
+    dfep <- filterdfepi(dfepiB)
     plot_ly(dfep, x=~WinsorizedCost, y=~BaselinePrice, color=~CancerType) %>%  
       add_trace(type='scatter',
                 text=~paste(PatientName, '<BR>', 
