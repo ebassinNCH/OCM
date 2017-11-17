@@ -544,43 +544,46 @@ server <- function(input, output) {
     infoBox(value=ICU14, title='% in ICU in Last 14 Days', color='green', icon=icon('bed'))
   })
   output$ValueQualityIPB <- renderValueBox( {
-    dfep <- dfepiB
+    dfep <- filterdfepiB(dfepiB)
     OCM1 <- round(mean(dfep$HasAdmit),3) * 100
     valueBox(value=OCM1, subtitle='% Episodes w/ Admit', color='light-blue', icon=icon('h-square'))
   })
   output$ValueQualityERB <- renderValueBox( {
-    dfep <- dfepiB
+    dfep <- filterdfepiB(dfepiB)
     OCM2 <- round(mean(dfep$ERVisitFlag),3) * 100
     valueBox(value=OCM2, subtitle='% Episodes w/ ER', color='light-blue', icon=icon('ambulance'))
   })
   output$ValueQualityMortB <- renderValueBox( {
-    dfep <- dfepiB
+    dfep <- filterdfepiB(dfepiB)
     Mort <- paste0(round(mean(dfep$DiedDuringEpisode),3) * 100, '%')
     valueBox(value=Mort, subtitle='Mortality Rate', color='light-blue', icon=icon('percent'))
   })
   output$ValueQualityICUB <- renderValueBox( {
-    dfep <- dfepiB
+    dfep <- filterdfepiB(dfepiB)
     ICU <- paste0(sum(dfep$ICUStays))
     valueBox(value=ICU, subtitle='ICU Stays', color='light-blue', icon=icon('bed'))
   })
   output$ValueQualityOCM3B <- renderInfoBox( {
+    dfepiB <- filterdfepiB(dfepiB)
     dfepdie <- filter(dfepiB, DiedDuringEpisode>0.4)
     OCM3 <- paste0(round(mean(dfepdie$HospicePassOCM3),3) * 100,'%')
     infoBox(value=OCM3, title='OCM-3: % w/ 3+ Hospice Days', color='light-blue', icon=icon('hospital-o'))
   })
   output$ValueQuality14AdmitB <- renderInfoBox( {
+    dfepiB <- filterdfepiB(dfepiB)
     dfepdie <- filter(dfepiB, DiedDuringEpisode>0.4)
     Admit14 <- paste0(round(mean(dfepdie$AdmitLast14Days),3) * 100, '%')
     infoBox(value=Admit14, title='% Admitted Last 14 Days', color='light-blue', icon=icon('h-square'))
   })
   output$ValueQualityEOLICUB <- renderInfoBox( {
+    dfepiB <- filterdfepiB(dfepiB)
     dfepdie <- filter(dfepiB, DiedDuringEpisode>0.4)
     ICU14 <- paste0(round(mean(dfepdie$ICULast14Days*100),1), '%')
     infoBox(value=ICU14, title='% in ICU in Last 14 Days', color='light-blue', icon=icon('bed'))
   })
   output$Quality1 <- renderPlotly( { 
     dfep <- filterdfepi(dfepi)
-    dfep <- dfepiB
+    dfepB <- filterdfepiB(dfepiB)
     xtitle <- titleQuality(input$Qmeasure1)
     dfb <- aggQuality(df=dfep, dfB=dfepB, var=input$Qmeasure1, grp=input$TOSGroupBy)
     bc <- barVsBenchmark(dfb, var=input$Qmeasure1, grp=input$TOSGroupBy, 
@@ -589,7 +592,7 @@ server <- function(input, output) {
   })
   output$Quality2 <- renderPlotly( { 
     dfep <- filterdfepi(dfepi)
-    dfep <- dfepiB
+    dfepB <- filterdfepiB(dfepiB)
     xtitle <- titleQuality(input$Qmeasure2)
     dfb <- aggQuality(df=dfep, dfB=dfepB, var=input$Qmeasure2, grp=input$TOSGroupBy)
     bc2 <- barVsBenchmark(dfb, var=input$Qmeasure2, grp=input$TOSGroupBy, 
@@ -599,7 +602,7 @@ server <- function(input, output) {
   output$Quality3 <- renderPlotly( { 
     dfepdie <- filterdfepi(dfepi)
     dfepdie <- filter(dfepdie, DiedDuringEpisode>0.4)
-    dfepdieB <- filterdfepi(dfepiB)
+    dfepdieB <- filterdfepiB(dfepiB)
     dfepdieB <- filter(dfepdieB, DiedDuringEpisode>0.4)
     xtitle <- titleQuality(input$Qmeasure3)
     dfb <- aggQuality(df=dfepdie, dfB=dfepdieB, var=input$Qmeasure3, grp=input$TOSGroupBy)
@@ -610,7 +613,7 @@ server <- function(input, output) {
   output$Quality4 <- renderPlotly( { 
     dfepdie <- filterdfepi(dfepi)
     dfepdie <- filter(dfepdie, DiedDuringEpisode>0.4)
-    dfepdieB <- filterdfepi(dfepiB)
+    dfepdieB <- filterdfepiB(dfepiB)
     dfepdieB <- filter(dfepdieB, DiedDuringEpisode>0.4)
     xtitle <- titleQuality(input$Qmeasure4)
     dfbd <- aggQuality(df=dfepdie, dfB=dfepdieB, var=input$Qmeasure4, grp=input$TOSGroupBy)
