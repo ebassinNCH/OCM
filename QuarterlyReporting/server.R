@@ -130,38 +130,38 @@ server <- function(input, output) {
     valueBox(value=Admits, subtitle='Admissions', color='green', icon=icon('ambulance'))
   })  
   output$ValueEpisB <- renderValueBox( {
-    dfep <- dfepiB
+    dfep <- filterdfepiB(dfepiB)
     Episodes = nrow(dfep)
     valueBox(value=Episodes, subtitle='# of Episodes', color='light-blue', icon=icon('hand-left', lib='glyphicon'))
   })
   output$ValueUniquePatientsB <- renderValueBox( {
-    dfep <- dfepiB
+    dfep <- filterdfepiB(dfepiB)
     UniquePats <- length(unique(dfep$BeneSK))
     valueBox(value=UniquePats, subtitle='# of Patients', color='light-blue', icon=icon('venus-mars'))
   })
   output$ValueMeanAgeB <- renderValueBox( {
-    dfep <- dfepiB
+    dfep <- filterdfepiB(dfepiB)
     MeanAge <- round(mean(dfep$Age),1)
     valueBox(value=MeanAge, subtitle='Average Age', color='light-blue', icon=icon('calendar'))
   })
   output$ValueUniqueProvB <- renderValueBox( {
-    dfep <- dfepiB
+    dfep <- filterdfepiB(dfepiB)
     UniqueDocs <- length(unique(dfep$AttributedNPI))
     valueBox(value=UniqueDocs, subtitle='# of Providers', color='light-blue', icon=icon('users'))
   })
   output$ValueTotalSpendB <- renderValueBox( {
-    dfep <- dfepiB
+    dfep <- filterdfepiB(dfepiB)
     totSpend <- format(round(sum(dfep$WinsorizedCost),0), big.mark=",", trim=TRUE)
     valueBox(value=paste('$', round(sum(dfep$WinsorizedCost)/1e6,1), 'M'), subtitle='Winsorized $Spend', color='light-blue', icon=icon('usd'))
   })  
   output$ValueAdmitsB <- renderValueBox( {
-    dfep <- dfepiB
+    dfep <- filterdfepiB(dfepiB)
     Admits <- format(sum(dfep$IPAdmits), big.mark=",", trim=TRUE)
     valueBox(value=Admits, subtitle='Admissions', color='light-blue', icon=icon('ambulance'))
   })  
   output$histActualCost <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfepB <- dfepiB
+    dfepB <- filterdfepiB(dfepiB)
     pc <- histCost(df=dfep, df2=dfepB, var='ActualCost', xtitle='Episode Cost (not Winsorized)',
                    barcolor='#8943c0', opaq=0.7, legname='Perf. Period')
     pb <- histCost(df=dfepB, df2=dfep, var='ActualCost', xtitle='Episode Cost (not Winsorized)',
@@ -170,7 +170,7 @@ server <- function(input, output) {
   } )
   output$histWinsorized <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfepB <- dfepiB
+    dfepB <- filterdfepiB(dfepiB)
     pc <- histCost(df=dfep, df2=dfepB, var='WinsorizedCost', xtitle='Winsorized (Truncated) Cost',
                    barcolor='#c08943', opaq=0.7, legname='Perf. Period')
     pb <- histCost(df=dfepB, df2=dfep, var='WinsorizedCost', xtitle='Winsorized (Truncated) Cost',
@@ -179,7 +179,7 @@ server <- function(input, output) {
   } )
   output$histDrug <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfepB <- dfepiB
+    dfepB <- filterdfepiB(dfepiB)
     pc <- histCost(df=dfep, df2=dfepB, var='DrugPaid', xtitle='Drug (Parts B and D) Cost',
                    barcolor='#437ac0', opaq=0.7, legname='Perf. Period')
     pb <- histCost(df=dfepB, df2=dfep, var='DrugPaid', xtitle='Drug (Parts B and D) Cost',
@@ -188,7 +188,7 @@ server <- function(input, output) {
   } )
   output$histIP <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfepB <- dfepiB
+    dfepB <- filterdfepiB(dfepiB)
     pc <- histCost(df=dfep, df2=dfepB, var='IPTotalPaid', xtitle='Inpatient Cost',
                    barcolor='#7ac043', opaq=0.7, legname='Perf. Period')
     pb <- histCost(df=dfepB, df2=dfep, var='IPTotalPaid', xtitle='Inpatient Cost',
@@ -197,6 +197,7 @@ server <- function(input, output) {
   } )
   output$dotHospice <- renderPlotly( {
     dfdied <- filterdfepi(dfdied)
+    dfdiedB <- filterdfepiB(dfdied)
     dfdied$Period = 'Current'
     dfdiedB$Period= 'Baseline'
     dfdied = select(dfdied, AttributedPhysicianName, HospicePassOCM3, Period)
@@ -265,7 +266,7 @@ server <- function(input, output) {
   } )  
   output$dotAdmit <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfepB <-dfepiB
+    dfepB <- filterdfepiB(dfepiB)
     dfep = dfep %>% select(AttributedPhysicianName, IPAdmits)
     dfepB = dfepB %>% select(AttributedPhysicianName, IPAdmits)
     dfep$Period='Current'
@@ -302,6 +303,7 @@ server <- function(input, output) {
   })  
   output$dotER <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
+    dfepB <- filterdfepiB(dfepiB)
     dfepB <- dfepiB
     dfep = select(dfep, AttributedPhysicianName, ERVisits)
     dfepB= select(dfepB,AttributedPhysicianName, ERVisits)
@@ -350,6 +352,63 @@ server <- function(input, output) {
             marker=list(color=colors,
                         line=list(width=0)),
             showlegend=FALSE)
+  })
+  output$KPIQuality <- DT::renderDataTable( {
+      dfdied <- filterdfepi(dfdied)
+      dfdiedB <- filterdfepiB(dfdiedB)
+      dfOCM3 <- dfdied %>% 
+        group_by(AttributedPhysicianName) %>% 
+        summarise(
+          DeathsPerf=n(),
+          OCM3Perf=mean(HospicePassOCM3)
+        )
+      dfOCM3B <- dfdiedB %>% 
+        group_by(AttributedPhysicianName) %>% 
+        summarise(
+          DeathsBase=n(),
+          OCM3Base=mean(HospicePassOCM3)
+        )
+      dfep <- filterdfepi(dfepi)
+      dfepB <- filterdfepiB(dfepiB)
+      dfw <- dfep %>% 
+        group_by(AttributedPhysicianName) %>% 
+        summarise(
+          EpisodesPerf=n(),
+          AdmitRatePerf=mean(sign(IPAdmits)),
+          ERRatePerf=mean(sign(ERVisits))
+        )
+      dfwB <- dfepB %>% 
+        group_by(AttributedPhysicianName) %>% 
+        summarise(
+          EpisodesBase=n(),
+          AdmitRateBase=mean(sign(IPAdmits)),
+          ERRateBase=mean(sign(ERVisits))
+        )
+      df = left_join(dfw, dfwB,    by='AttributedPhysicianName')
+      df = left_join(df,  dfOCM3,  by='AttributedPhysicianName')
+      df = left_join(df,  dfOCM3B, by='AttributedPhysicianName')
+      df = df %>% arrange(desc(EpisodesPerf))
+      df = df %>% 
+        select(AttributedPhysicianName, EpisodesPerf, EpisodesBase,
+               AdmitRatePerf, AdmitRateBase, ERRatePerf, ERRateBase,
+               DeathsPerf, DeathsBase, OCM3Perf, OCM3Base)
+      print(names(df))
+      df = df %>% 
+        rename(
+          `Attributed Physician` = AttributedPhysicianName,
+          `Baseline Episodes` = EpisodesBase,
+          `Perf. Episodes` = EpisodesPerf,
+          `Baseline Deaths` = DeathsBase,
+          `Perf. Deaths` = DeathsPerf,
+          `Baseline Admit %` = AdmitRateBase,
+          `Perf. Admit %` = AdmitRatePerf,
+          `Baseline ER %` = ERRateBase,
+          `Perf. ER %` = ERRatePerf,
+          `Baseline OCM-3 %` = OCM3Base,
+          `Perf. OCM-3 %` = OCM3Perf
+        )
+      keyTable <- OutputTable(df, headerCols=c('Attributed Physician'))
+      keyTable
   })
   
   #### Geography Tab Outputs ####

@@ -75,6 +75,11 @@ ui <- dashboardPage(
                                       plotlyOutput('dotER', height='130px')
                                   )
                            )
+                         ),
+                         fluidRow(box(solidHeader=TRUE, title='Claims-Based Quality Measure Table',
+                                      status='success', width=12,
+                                      DT::dataTableOutput('KPIQuality')
+                                  )
                          )
                 ), # close tabPanel
                 #### Quality Tab ####
