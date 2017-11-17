@@ -250,7 +250,7 @@ ui <- dashboardPage(
                 #### Outlier Tab ####
                 tabPanel('Outliers',
                          tabBox(title=HTML('<H3>Outlier Episodes</h3>'),
-                                side='left', width=12, selected='Chart', height='780px',
+                                side='left', width=12, selected='Chart', # height='780px',
                                 tabPanel('Chart', plotlyOutput('OutlierBar')),
                                 tabPanel('Patient List', DT::dataTableOutput('OutlierTable'))
                          )
@@ -317,7 +317,7 @@ ui <- dashboardPage(
                 tabPanel('Inpatient',
                          column(6,
                                 tabBox(title=HTML('<H3>Admission Rate</h3>'),
-                                       side='left', width=12, selected='# of Admits', height='560px',
+                                       side='left', width=12, selected='# of Admits', height='660px',
                                        tabPanel('# of Admits',
                                                 tabBox(title='# of Admits', side='left', width=12, selected='Pie of Count',
                                                        tabPanel('Pie of Count', plotlyOutput('IPPie')),
@@ -343,7 +343,7 @@ ui <- dashboardPage(
                          ),
                          column(6, 
                                 tabBox(title=HTML('<H3>Hospital Stats</h3>'),
-                                       side='left', width=12, selected='Chart', height='560px',
+                                       side='left', width=12, selected='Chart', height='660px',
                                        tabPanel('Chart', plotlyOutput('IPHospBar')),
                                        tabPanel('Table', DT::dataTableOutput('IPHospTab'))
                                 )

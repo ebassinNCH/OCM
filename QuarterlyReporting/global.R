@@ -417,7 +417,7 @@ pieTOS = function(df, opaq=0.8) {
   dfpie2 = merge(dfpie2, dfTOSColors)
   p = plot_ly(dfpie2, labels=~CostType, values=~AmountPaid, type='pie', opacity=opaq,
             textposition='inside', textinfo='label+percent',
-            text=~paste('$', AmountPaid), hoverinfo='text', rotation=90, 
+            text=~paste0('$', round(AmountPaid,0)), hoverinfo='text', rotation=90, 
             textfont=list(color='white', family='Balto', size=13),
             marker=list(colors=~TOSColor,
                         line=list(width=0)),

@@ -1,3 +1,4 @@
+#### Read data and prepare it for analysis.####
 dfepi <- read_feather('dfepisummary.feather') 
 dfepi$DrugPaid = ( dfepi$PartBTOSPaidDrugs + dfepi$PartBTOSPaidChemo + 
                      dfepi$PartDChemoPaid + dfepi$PartDNonChemoPaid + 
@@ -990,7 +991,7 @@ server <- function(input, output) {
   #### Outliers Tab ####
   output$OutlierBar <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfepB <-dfepiB
+    dfepB <- filterdfepiB(dfepiB)
     dfbb <- aggQuality(df=dfep, dfB=dfepB, var='IsOutlier', grp=input$TOSGroupBy)
     ob <- barVsBenchmark(dfbb, var='IsOutlier', grp=input$TOSGroupBy, 
                          color='#c0437a', xlabel='% of Episodes')
@@ -1048,7 +1049,8 @@ server <- function(input, output) {
                 MeanCost=mean(ActualCost)
       )
     dfsum <- arrange(dfsum, get(srtVar))# desc(MeanCost))
-    plot_ly(dfsum, y=~YV, alpha=0.6) %>%
+    dfc = read_feather('/AdvAnalytics/OCM/Reference/dfTOSColors.feather')
+    plot_ly(dfsum, y=~YV, opacity=0.7) %>%
       add_trace(type='bar', x=~E_M, name='E&M',
                 text=~paste(YV,
                             '<BR>E&M', 
@@ -1056,7 +1058,8 @@ server <- function(input, output) {
                             '<BR>Episodes: ', Episodes,
                             '<BR>Mean Episode Cost: $', format(round(MeanCost,0), big.mark=",", trim=TRUE),
                             '<BR>Total Spend: $', format(round(TotalCost,0), big.mark=",", trim=TRUE)),
-                hoverinfo='text') %>%
+                hoverinfo='text',
+                marker=list(color=dfc$TOSColor[dfc$CostType=='E_M'])) %>%
       add_trace(type='bar', x=~PartBDrugs, name='Infused Drugs',
                 text=~paste(YV,
                             '<BR>Infused and Injected Drugs (Part B)', 
@@ -1064,7 +1067,8 @@ server <- function(input, output) {
                             '<BR>Episodes: ', Episodes,
                             '<BR>Mean Episode Cost: $', format(round(MeanCost,0), big.mark=",", trim=TRUE),
                             '<BR>Total Spend: $', format(round(TotalCost,0), big.mark=",", trim=TRUE)),
-                hoverinfo='text') %>%
+                hoverinfo='text',
+                marker=list(color=dfc$TOSColor[dfc$CostType=='PartBDrugs'])) %>%
       add_trace(type='bar', x=~Orals, name='Oral Drugs',
                 text=~paste(YV,
                             '<BR>Oral Drugs', 
@@ -1072,7 +1076,8 @@ server <- function(input, output) {
                             '<BR>Episodes: ', Episodes,
                             '<BR>Mean Episode Cost: $', format(round(MeanCost,0), big.mark=",", trim=TRUE),
                             '<BR>Total Spend: $', format(round(TotalCost,0), big.mark=",", trim=TRUE)),
-                hoverinfo='text') %>%
+                hoverinfo='text',
+                marker=list(color=dfc$TOSColor[dfc$CostType=='Orals'])) %>%
       add_trace(type='bar', x=~Inpat, name='Inpatient',
                 text=~paste(YV,
                             '<BR>Inpatient (Hosp. Bills only)', 
@@ -1080,7 +1085,8 @@ server <- function(input, output) {
                             '<BR>Episodes: ', Episodes,
                             '<BR>Mean Episode Cost: $', format(round(MeanCost,0), big.mark=",", trim=TRUE),
                             '<BR>Total Spend: $', format(round(TotalCost,0), big.mark=",", trim=TRUE)),
-                hoverinfo='text') %>%
+                hoverinfo='text',
+                marker=list(color=dfc$TOSColor[dfc$CostType=='Inpat'])) %>%
       add_trace(type='bar', x=~Testing, name='Lab/Imaging',
                 text=~paste(YV,
                             '<BR>Lab and Imaging', 
@@ -1088,7 +1094,8 @@ server <- function(input, output) {
                             '<BR>Episodes: ', Episodes,
                             '<BR>Mean Episode Cost: $', format(round(MeanCost,0), big.mark=",", trim=TRUE),
                             '<BR>Total Spend: $', format(round(TotalCost,0), big.mark=",", trim=TRUE)),
-                hoverinfo='text') %>%
+                hoverinfo='text',
+                marker=list(color=dfc$TOSColor[dfc$CostType=='Testing'])) %>%
       add_trace(type='bar', x=~RadOnc, name='Radiation',
                 text=~paste(YV,
                             '<BR>Radiation Oncology', 
@@ -1096,7 +1103,8 @@ server <- function(input, output) {
                             '<BR>Episodes: ', Episodes,
                             '<BR>Mean Episode Cost: $', format(round(MeanCost,0), big.mark=",", trim=TRUE),
                             '<BR>Total Spend: $', format(round(TotalCost,0), big.mark=",", trim=TRUE)),
-                hoverinfo='text') %>%
+                hoverinfo='text',
+                marker=list(color=dfc$TOSColor[dfc$CostType=='RadOnc'])) %>%
       add_trace(type='bar', x=~Procs, name='Procedures',
                 text=~paste(YV,
                             '<BR>Procedures, including infusion', 
@@ -1104,7 +1112,8 @@ server <- function(input, output) {
                             '<BR>Episodes: ', Episodes,
                             '<BR>Mean Episode Cost: $', format(round(MeanCost,0), big.mark=",", trim=TRUE),
                             '<BR>Total Spend: $', format(round(TotalCost,0), big.mark=",", trim=TRUE)),
-                hoverinfo='text') %>%
+                hoverinfo='text',
+                marker=list(color=dfc$TOSColor[dfc$CostType=='Procs'])) %>%
       add_trace(type='bar', x=~Hospice, name='Hospice',
                 text=~paste(YV,
                             '<BR>Hospice', 
@@ -1112,7 +1121,8 @@ server <- function(input, output) {
                             '<BR>Episodes: ', Episodes,
                             '<BR>Mean Episode Cost: $', format(round(MeanCost,0), big.mark=",", trim=TRUE),
                             '<BR>Total Spend: $', format(round(TotalCost,0), big.mark=",", trim=TRUE)),
-                hoverinfo='text') %>%
+                hoverinfo='text',
+                marker=list(color=dfc$TOSColor[dfc$CostType=='Hospice'])) %>%
       add_trace(type='bar', x=~PostAcute, name='Post-Acute',
                 text=~paste(YV,
                             '<BR>SNF and Home Health', 
@@ -1120,7 +1130,8 @@ server <- function(input, output) {
                             '<BR>Episodes: ', Episodes,
                             '<BR>Mean Episode Cost: $', format(round(MeanCost,0), big.mark=",", trim=TRUE),
                             '<BR>Total Spend: $', format(round(TotalCost,0), big.mark=",", trim=TRUE)),
-                hoverinfo='text') %>%
+                hoverinfo='text',
+                marker=list(color=dfc$TOSColor[dfc$CostType=='PostAcute'])) %>%
       add_trace(type='bar', x=~Other, name='Other',
                 text=~paste(YV,
                             '<BR>Other Costs', 
@@ -1128,7 +1139,8 @@ server <- function(input, output) {
                             '<BR>Episodes: ', Episodes,
                             '<BR>Mean Episode Cost: $', format(round(MeanCost,0), big.mark=",", trim=TRUE),
                             '<BR>Total Spend: $', format(round(TotalCost,0), big.mark=",", trim=TRUE)),
-                hoverinfo='text') %>%
+                hoverinfo='text',
+                marker=list(color=dfc$TOSColor[dfc$CostType=='Other'])) %>%
       layout(    title='',
                  xaxis=list(title='$Cost Per Episode', 
                             showticklabels=TRUE, 
@@ -1152,7 +1164,7 @@ server <- function(input, output) {
     pieTOS(df=dfep, opaq=0.7) 
   })
   output$TOSPie2 <- renderPlotly( {
-    dfepB = filterdfepi(dfepiB)
+    dfepB = filterdfepiB(dfepiB)
     pieTOS(df=dfepB, opaq=0.5)
   }) # close TOSPie
   
