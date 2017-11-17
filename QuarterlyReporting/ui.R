@@ -4,7 +4,7 @@ potentialdocs <- sort(unique(dfepi$AttributedPhysicianName))
 potentialCT <- sort(unique(dfepiB$CancerType))
 potentialHosp <- sort(unique(dfie$CCN_lbl))
 date1 <- min(dfepi$EpiStart)
-date2 <- max(dfepi$EpiStart)
+date2 <- seq(as.Date(cut(as.Date(max(dfepi$EpiStart)), 'month')), length=2, by='-5 month')[2]
 
 #### UI Section ####
 ui <- dashboardPage(
@@ -379,8 +379,16 @@ ui <- dashboardPage(
                            valueBoxOutput('ValueEOLPctHospice', width=2),
                            valueBoxOutput('ValueEOLPassOCM3', width=2),
                            valueBoxOutput('ValueEOLHospicePaid', width=2),
-                           valueBoxOutput('ValueEOLHospiceSavings0', width=2),
-                           valueBoxOutput('ValueEOLHospiceSavings3', width=2)
+                           valueBoxOutput('ValueEOLHospiceCost0', width=2),
+                           valueBoxOutput('ValueEOLHospiceCost3', width=2)
+                         ),
+                         fluidRow(
+                           valueBoxOutput('ValueEOLDeathsB', width=2),
+                           valueBoxOutput('ValueEOLPctHospiceB', width=2),
+                           valueBoxOutput('ValueEOLPassOCM3B', width=2),
+                           valueBoxOutput('ValueEOLHospicePaidB', width=2),
+                           valueBoxOutput('ValueEOLHospiceCost0B', width=2),
+                           valueBoxOutput('ValueEOLHospiceCost3B', width=2)
                          ),
                          fluidRow(
                            column(6, 
@@ -404,49 +412,53 @@ ui <- dashboardPage(
                            infoBoxOutput('IBEOLQualityChemo')
                          ),
                          fluidRow(
+                           infoBoxOutput('IBEOLQualityAdmitB'),
+                           infoBoxOutput('IBEOLQualityICUB'),
+                           infoBoxOutput('IBEOLQualityChemoB')
+                         ),
+                         fluidRow(
                            tabBox(title='Care in Last 14 Days of Life', side='left', width=12, height='530px', selected='Admits',
                                   tabPanel('Admits', plotlyOutput('EOLQualityAdmit', height='450px')),
                                   tabPanel('ICU',    plotlyOutput('EOLQualityICU', height='450px')),
                                   tabPanel('Chemo', plotlyOutput('EOLQualityChemo', height='450px'))
                            )
                          )
-                ),
+                )#,
                 #### Simulation Tab ####
-                tabPanel('Simulation',
-                         # Settings and instructions ####
-                         fluidRow(column(1, numericInput('BootSize', label='Sample Size', value = round(nrow(dfep)/6,0))),
-                                  column(11, HTML('<H3><center>About this Tab</center></h3>This tab presents the results of a "bootstrap" 
-                                                  simulation.  The simulation mimics the random variation that a practice 
-                                                  is likely to experience under OCM.  Essentially, the simulation involves
-                                                  computing the costs, target prices, and savings associated with a random 
-                                                  sample of episodes from your baseline data.  This tab repeats that random 
-                                                  sampling 100 times, with each sample having a different set of episodes.<br>br>
-                                                  The results show simulated reconciliations as they will occur in the OCM 
-                                                  program.  You will almost certainly see some reconciliations where you have 
-                                                  savings and some where you have losses.  The key is to understand the 
-                                                  volatility that is almost sure to occur with your program.  <b>The results 
-                                                  assume that you make no real changes to the way that you treat patients.</b>  
-                                                  We realize that assumption is absurd, but the volatility will persist anyway.
-                                                  <br>To use this page, type a sample size (number of episodes) into the box 
-                                                  on the left.  (The default is the average number of episodes that you had per 
-                                                  half-year during the baseline period.)  Each time you change the number, the 
-                                                  software will create 100 new samples.  <i>If you leave this page and return 
-                                                  to it, the simulation will be repeated from scratch and you will see new 
-                                                  results.<i>')
-                              )
-                              
-                    ), 
-                    # Reports ####
-                    fluidRow()
+                # tabPanel('Simulation',
+                    #      # Settings and instructions ####
+                    #      fluidRow(column(1, numericInput('BootSize', label='Sample Size', value = round(nrow(dfep)/6,0))),
+                    #               column(11, HTML('<H3><center>About this Tab</center></h3>This tab presents the results of a "bootstrap" 
+                    #                               simulation.  The simulation mimics the random variation that a practice 
+                    #                               is likely to experience under OCM.  Essentially, the simulation involves
+                    #                               computing the costs, target prices, and savings associated with a random 
+                    #                               sample of episodes from your baseline data.  This tab repeats that random 
+                    #                               sampling 100 times, with each sample having a different set of episodes.<br>br>
+                    #                               The results show simulated reconciliations as they will occur in the OCM 
+                    #                               program.  You will almost certainly see some reconciliations where you have 
+                    #                               savings and some where you have losses.  The key is to understand the 
+                    #                               volatility that is almost sure to occur with your program.  <b>The results 
+                    #                               assume that you make no real changes to the way that you treat patients.</b>  
+                    #                               We realize that assumption is absurd, but the volatility will persist anyway.
+                    #                               <br>To use this page, type a sample size (number of episodes) into the box 
+                    #                               on the left.  (The default is the average number of episodes that you had per 
+                    #                               half-year during the baseline period.)  Each time you change the number, the 
+                    #                               software will create 100 new samples.  <i>If you leave this page and return 
+                    #                               to it, the simulation will be repeated from scratch and you will see new 
+                    #                               results.<i>')
+                    #           )
+                    #           
+                    # ), 
+                    # # Reports ####
                     # fluidRow(
-                    #     tabBox('Volatility', side='left', width=12, height='510px', 
+                    #     tabBox('Volatility', side='left', width=12, height='510px',
                     #            selected='First 25 Reconciliations',
                     #         tabPanel('First 25 Reconciliations', plotlyOutput('BootBar')),
                     #         tabPanel('Histogram', plotlyOutput('BootHist')),
                     #         tabPanel('Control Chart', plotlyOutput('BootControlChart'))
                     #     )
                     # )
-            )
+            #)
             
     ) # close tabsetPanel
   ) # close dashboardBody

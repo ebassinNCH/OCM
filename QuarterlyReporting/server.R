@@ -49,10 +49,9 @@ server <- function(input, output) {
   })    
   #### Filter Functions ####
   filterdfepi <- function(df) {
-    # dfep <- dfepi %>% 
-    #   filter(EpiStart>=input$filterDates[1]) %>%  
-    #   filter(EpiStart<=input$filterDates[2]) 
-    dfq <- df
+    dfq <- df %>% 
+      filter(EpiStart>=as.Date(input$filterDates[1])) %>%  
+      filter(EpiStart<=as.Date(input$filterDates[2])) 
     if (!is.null(input$Docs)) {
       dfq <- dfq %>% filter(AttributedPhysicianName %in% input$Docs)
     }
@@ -63,11 +62,33 @@ server <- function(input, output) {
     return(dfq)
   }
   
+  filterdfepiB <- function(df) {
+    dfq <- df 
+    if (!is.null(input$Docs)) {
+      dfq <- dfq %>% filter(AttributedPhysicianName %in% input$Docs)
+    }
+    if (!is.null(input$CT)) {
+      # TODO: Switch to CancerTypeDetailed
+      dfq <- dfq %>% filter(CancerType %in% input$CT)
+    }
+    return(dfq)
+  }
+
   filterER <- function(df) {
-    # dfep <- dfepi %>% 
-    #   filter(EpiStart>=input$filterDates[1]) %>%  
-    #   filter(EpiStart<=input$filterDates[2]) 
-    dfi <- dfie
+    dfi <- dfie %>% 
+      filter(EpiStart>=input$filterDates[1]) %>%  
+      filter(EpiStart<=input$filterDates[2]) 
+    if (!is.null(input$ieHosp)) {
+      dfi <- dfi %>% filter(CCN_lbl %in% input$ieHosp)
+    }
+    if (!is.null(input$ieCCS)) {
+      dfi <- dfi %>% filter(CCS_lbl %in% input$ieCCS)
+    }
+    return(dfi)
+  }
+
+  filterERB <- function(df) {
+    dfi <- dfieB 
     if (!is.null(input$ieHosp)) {
       dfi <- dfi %>% filter(CCN_lbl %in% input$ieHosp)
     }
@@ -109,38 +130,38 @@ server <- function(input, output) {
     valueBox(value=Admits, subtitle='Admissions', color='green', icon=icon('ambulance'))
   })  
   output$ValueEpisB <- renderValueBox( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     Episodes = nrow(dfep)
     valueBox(value=Episodes, subtitle='# of Episodes', color='light-blue', icon=icon('hand-left', lib='glyphicon'))
   })
   output$ValueUniquePatientsB <- renderValueBox( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     UniquePats <- length(unique(dfep$BeneSK))
     valueBox(value=UniquePats, subtitle='# of Patients', color='light-blue', icon=icon('venus-mars'))
   })
   output$ValueMeanAgeB <- renderValueBox( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     MeanAge <- round(mean(dfep$Age),1)
     valueBox(value=MeanAge, subtitle='Average Age', color='light-blue', icon=icon('calendar'))
   })
   output$ValueUniqueProvB <- renderValueBox( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     UniqueDocs <- length(unique(dfep$AttributedNPI))
     valueBox(value=UniqueDocs, subtitle='# of Providers', color='light-blue', icon=icon('users'))
   })
   output$ValueTotalSpendB <- renderValueBox( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     totSpend <- format(round(sum(dfep$WinsorizedCost),0), big.mark=",", trim=TRUE)
     valueBox(value=paste('$', round(sum(dfep$WinsorizedCost)/1e6,1), 'M'), subtitle='Winsorized $Spend', color='light-blue', icon=icon('usd'))
   })  
   output$ValueAdmitsB <- renderValueBox( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     Admits <- format(sum(dfep$IPAdmits), big.mark=",", trim=TRUE)
     valueBox(value=Admits, subtitle='Admissions', color='light-blue', icon=icon('ambulance'))
   })  
   output$histActualCost <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfepB <- filterdfepi(dfepiB)
+    dfepB <- dfepiB
     pc <- histCost(df=dfep, df2=dfepB, var='ActualCost', xtitle='Episode Cost (not Winsorized)',
                    barcolor='#8943c0', opaq=0.7, legname='Perf. Period')
     pb <- histCost(df=dfepB, df2=dfep, var='ActualCost', xtitle='Episode Cost (not Winsorized)',
@@ -149,7 +170,7 @@ server <- function(input, output) {
   } )
   output$histWinsorized <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfepB <- filterdfepi(dfepiB)
+    dfepB <- dfepiB
     pc <- histCost(df=dfep, df2=dfepB, var='WinsorizedCost', xtitle='Winsorized (Truncated) Cost',
                    barcolor='#c08943', opaq=0.7, legname='Perf. Period')
     pb <- histCost(df=dfepB, df2=dfep, var='WinsorizedCost', xtitle='Winsorized (Truncated) Cost',
@@ -158,7 +179,7 @@ server <- function(input, output) {
   } )
   output$histDrug <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfepB <- filterdfepi(dfepiB)
+    dfepB <- dfepiB
     pc <- histCost(df=dfep, df2=dfepB, var='DrugPaid', xtitle='Drug (Parts B and D) Cost',
                    barcolor='#437ac0', opaq=0.7, legname='Perf. Period')
     pb <- histCost(df=dfepB, df2=dfep, var='DrugPaid', xtitle='Drug (Parts B and D) Cost',
@@ -167,7 +188,7 @@ server <- function(input, output) {
   } )
   output$histIP <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfepB <- filterdfepi(dfepiB)
+    dfepB <- dfepiB
     pc <- histCost(df=dfep, df2=dfepB, var='IPTotalPaid', xtitle='Inpatient Cost',
                    barcolor='#7ac043', opaq=0.7, legname='Perf. Period')
     pb <- histCost(df=dfepB, df2=dfep, var='IPTotalPaid', xtitle='Inpatient Cost',
@@ -176,7 +197,6 @@ server <- function(input, output) {
   } )
   output$dotHospice <- renderPlotly( {
     dfdied <- filterdfepi(dfdied)
-    dfdiedB <- filterdfepi(dfdiedB)
     dfdied$Period = 'Current'
     dfdiedB$Period= 'Baseline'
     dfdied = select(dfdied, AttributedPhysicianName, HospicePassOCM3, Period)
@@ -245,7 +265,7 @@ server <- function(input, output) {
   } )  
   output$dotAdmit <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfepB <-filterdfepi(dfepiB)
+    dfepB <-dfepiB
     dfep = dfep %>% select(AttributedPhysicianName, IPAdmits)
     dfepB = dfepB %>% select(AttributedPhysicianName, IPAdmits)
     dfep$Period='Current'
@@ -282,7 +302,7 @@ server <- function(input, output) {
   })  
   output$dotER <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfepB <- filterdfepi(dfepiB)
+    dfepB <- dfepiB
     dfep = select(dfep, AttributedPhysicianName, ERVisits)
     dfepB= select(dfepB,AttributedPhysicianName, ERVisits)
     dfep$Period='Current'
@@ -465,46 +485,43 @@ server <- function(input, output) {
     infoBox(value=ICU14, title='% in ICU in Last 14 Days', color='green', icon=icon('bed'))
   })
   output$ValueQualityIPB <- renderValueBox( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     OCM1 <- round(mean(dfep$HasAdmit),3) * 100
     valueBox(value=OCM1, subtitle='% Episodes w/ Admit', color='light-blue', icon=icon('h-square'))
   })
   output$ValueQualityERB <- renderValueBox( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     OCM2 <- round(mean(dfep$ERVisitFlag),3) * 100
     valueBox(value=OCM2, subtitle='% Episodes w/ ER', color='light-blue', icon=icon('ambulance'))
   })
   output$ValueQualityMortB <- renderValueBox( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     Mort <- paste0(round(mean(dfep$DiedDuringEpisode),3) * 100, '%')
     valueBox(value=Mort, subtitle='Mortality Rate', color='light-blue', icon=icon('percent'))
   })
   output$ValueQualityICUB <- renderValueBox( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     ICU <- paste0(sum(dfep$ICUStays))
     valueBox(value=ICU, subtitle='ICU Stays', color='light-blue', icon=icon('bed'))
   })
   output$ValueQualityOCM3B <- renderInfoBox( {
-    dfepdie <- filterdfepi(dfepiB)
-    dfepdie <- filter(dfepdie, DiedDuringEpisode>0.4)
+    dfepdie <- filter(dfepiB, DiedDuringEpisode>0.4)
     OCM3 <- paste0(round(mean(dfepdie$HospicePassOCM3),3) * 100,'%')
     infoBox(value=OCM3, title='OCM-3: % w/ 3+ Hospice Days', color='light-blue', icon=icon('hospital-o'))
   })
   output$ValueQuality14AdmitB <- renderInfoBox( {
-    dfepdie <- filterdfepi(dfepiB)
-    dfepdie <- filter(dfepdie, DiedDuringEpisode>0.4)
+    dfepdie <- filter(dfepiB, DiedDuringEpisode>0.4)
     Admit14 <- paste0(round(mean(dfepdie$AdmitLast14Days),3) * 100, '%')
     infoBox(value=Admit14, title='% Admitted Last 14 Days', color='light-blue', icon=icon('h-square'))
   })
   output$ValueQualityEOLICUB <- renderInfoBox( {
-    dfepdie <- filterdfepi(dfepiB)
-    dfepdie <- filter(dfepdie, DiedDuringEpisode>0.4)
+    dfepdie <- filter(dfepiB, DiedDuringEpisode>0.4)
     ICU14 <- paste0(round(mean(dfepdie$ICULast14Days*100),1), '%')
     infoBox(value=ICU14, title='% in ICU in Last 14 Days', color='light-blue', icon=icon('bed'))
   })
   output$Quality1 <- renderPlotly( { 
     dfep <- filterdfepi(dfepi)
-    dfepB <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     xtitle <- titleQuality(input$Qmeasure1)
     dfb <- aggQuality(df=dfep, dfB=dfepB, var=input$Qmeasure1, grp=input$TOSGroupBy)
     bc <- barVsBenchmark(dfb, var=input$Qmeasure1, grp=input$TOSGroupBy, 
@@ -513,7 +530,7 @@ server <- function(input, output) {
   })
   output$Quality2 <- renderPlotly( { 
     dfep <- filterdfepi(dfepi)
-    dfepB <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     xtitle <- titleQuality(input$Qmeasure2)
     dfb <- aggQuality(df=dfep, dfB=dfepB, var=input$Qmeasure2, grp=input$TOSGroupBy)
     bc2 <- barVsBenchmark(dfb, var=input$Qmeasure2, grp=input$TOSGroupBy, 
@@ -546,24 +563,24 @@ server <- function(input, output) {
   
   #### Pricing Tab Outputs ####
   output$IBEpis <- renderInfoBox( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     Episodes = nrow(dfep)
     infoBox('# of Episodes', value=Episodes, color='light-blue', fill=TRUE, width=4, 
             icon=icon('hand-left', lib='glyphicon'))
   })
   output$IBPrice <- renderInfoBox( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     infoBox('Total Target Price', 
             value=paste('$', round(sum(dfep$BaselinePrice)/1e6,1), 'M'), 
             color='light-blue', fill=TRUE, width=4, icon=icon('bullseye'))
   })  
   output$IBWinsor <- renderInfoBox( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     infoBox('$Winsorized Spend', value=paste('$', round(sum(dfep$WinsorizedCost)/1e6,1), 'M'), 
             color='light-blue', fill=TRUE, width=4, icon=icon('usd'))
   })  
   output$priceCTSum <- renderPlotly( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     dfprice <- dfep %>% group_by(CancerTypeDetailed) %>% summarize(
       Episodes=n(),
       MeanPrice=round(mean(BaselinePrice),0),
@@ -609,7 +626,7 @@ server <- function(input, output) {
                titlefont=fontNarrow)
   } ) # close PriceCTSum
   output$histPrice <- renderPlotly( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     # target price distribution
     bp = dfep$BaselinePrice
     maxPrice = max(bp)
@@ -637,7 +654,7 @@ server <- function(input, output) {
         bargap=0)
   } )
   output$PriceScatter <- renderPlotly( {
-    dfep <- filterdfepi(dfepiB)
+    dfep <- dfepiB
     plot_ly(dfep, x=~WinsorizedCost, y=~BaselinePrice, color=~CancerType) %>%  
       add_trace(type='scatter',
                 text=~paste(PatientName, '<BR>', 
@@ -911,7 +928,7 @@ server <- function(input, output) {
   #### Outliers Tab ####
   output$OutlierBar <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
-    dfepB <-filterdfepi(dfepiB)
+    dfepB <-dfepiB
     dfbb <- aggQuality(df=dfep, dfB=dfepB, var='IsOutlier', grp=input$TOSGroupBy)
     ob <- barVsBenchmark(dfbb, var='IsOutlier', grp=input$TOSGroupBy, 
                          color='#c0437a', xlabel='% of Episodes')
@@ -926,6 +943,7 @@ server <- function(input, output) {
     outTab
   })
   #### TOS Tab Outputs ####
+  # TODO... Make stack colors match pie colors
   output$TOSStack <- renderPlotly( { 
     grpVar <- input$TOSGroupBy
     srtVar <- input$TOSSortBy
@@ -1589,14 +1607,14 @@ server <- function(input, output) {
     dfep <- filterdfepi(dfepi)
     dfep <- filter(dfep, DiedDuringEpisode==1)
     Deaths = nrow(dfep)
-    valueBox(value=Deaths, subtitle='# of Deaths', color='light-blue', icon=icon('hand-left', lib='glyphicon'))
+    valueBox(value=Deaths, subtitle='# of Deaths', color='green', icon=icon('hand-left', lib='glyphicon'))
   })
   output$ValueEOLPctHospice <- renderValueBox( {
     dfep <- filterdfepi(dfepi)
     dfep <- filter(dfep, DiedDuringEpisode==1)
     dfep$HasHosp <- ifelse(dfep$HospiceLOS==0, 0, 1)
     PctHosp = mean(dfep$HasHosp)
-    valueBox(value=paste0(round(100.0*PctHosp, 1), '%'), subtitle='% with Hospice', color='light-blue', 
+    valueBox(value=paste0(round(100.0*PctHosp, 1), '%'), subtitle='% with Hospice', color='green', 
              icon=icon('hospital-o'))
   })
   output$ValueEOLPassOCM3 <- renderValueBox( {
@@ -1604,7 +1622,7 @@ server <- function(input, output) {
     dfep <- filter(dfep, DiedDuringEpisode==1)
     dfep$HasHosp3 <- ifelse(dfep$HospiceLOS>=3, 1, 0)
     PctHosp3 = mean(dfep$HasHosp3)
-    valueBox(value=paste0(round(100.0*PctHosp3, 1), '%'), subtitle='Pass OCM-3 (3+ Days)', color='light-blue', 
+    valueBox(value=paste0(round(100.0*PctHosp3, 1), '%'), subtitle='Pass OCM-3 (3+ Days)', color='green', 
              icon=icon('thumbs-up'))
   })
   output$ValueEOLHospicePaid <- renderValueBox( {
@@ -1612,7 +1630,7 @@ server <- function(input, output) {
     dfep <- filter(dfep, DiedDuringEpisode==1)
     MeanHospPaid = mean(dfep$HospicePaid)
     valueBox(value=paste0('$', round(MeanHospPaid,0)), subtitle='$Hospice Per Patient', 
-             color='light-blue', icon=icon('usd'))
+             color='green', icon=icon('usd'))
   })
   output$ValueEOLHospiceSavings0 <- renderValueBox( {
     dfep <- filterdfepi(dfepi)
@@ -1621,7 +1639,7 @@ server <- function(input, output) {
     dfep$Savings = dfep$BaselinePrice - dfep$WinsorizedCost
     Savings0 = mean(dfep$Savings)
     valueBox(value=paste0('$', round(Savings0,0)), subtitle='Avg. Savings w/o Hospice', 
-             color='light-blue', icon=icon('money'))
+             color='green', icon=icon('money'))
   })
   output$ValueEOLHospiceSavings3 <- renderValueBox( {
     dfep <- filterdfepi(dfepi)
@@ -1630,6 +1648,89 @@ server <- function(input, output) {
     dfep$Savings = dfep$BaselinePrice - dfep$WinsorizedCost
     Savings3 = mean(dfep$Savings)
     valueBox(value=paste0('$', round(Savings3,0)), subtitle='Avg. Savings w/ 3+ Days', 
+             color='green', icon=icon('money'))
+  })
+  output$ValueEOLHospiceCost0 <- renderValueBox( {
+    dfep <- filterdfepi(dfepi)
+    dfep <- filter(dfep, DiedDuringEpisode==1)
+    dfep = filter(dfep, HospiceLOS==0)
+    Savings0 = mean(dfep$WinsorizedCost)
+    Savings0 = format(round(Savings0,0), big.mark=",", trim=TRUE)
+    valueBox(value=paste0('$', Savings0), subtitle='Avg Cost w/o Hospice', 
+             color='green', icon=icon('money'))
+  })
+  output$ValueEOLHospiceCost3 <- renderValueBox( {
+    dfep <- filterdfepi(dfepi)
+    dfep <- filter(dfep, DiedDuringEpisode==1)
+    dfep = filter(dfep, HospiceLOS>=3)
+    Savings3 = mean(dfep$WinsorizedCost)
+    Savings3 = format(round(Savings3,0), big.mark=",", trim=TRUE)
+    valueBox(value=paste0('$', Savings3), subtitle='Avg. Cost w/ 3+ Days', 
+             color='green', icon=icon('money'))
+  })
+  output$ValueEOLDeathsB <- renderValueBox( {
+    dfep <- filterdfepiB(dfepiB)
+    dfep <- filter(dfep, DiedDuringEpisode==1)
+    Deaths = nrow(dfep)
+    valueBox(value=Deaths, subtitle='# of Deaths', color='light-blue', icon=icon('hand-left', lib='glyphicon'))
+  })
+  output$ValueEOLPctHospiceB <- renderValueBox( {
+    dfep <- filterdfepiB(dfepiB)
+    dfep <- filter(dfep, DiedDuringEpisode==1)
+    dfep$HasHosp <- ifelse(dfep$HospiceLOS==0, 0, 1)
+    PctHosp = mean(dfep$HasHosp)
+    valueBox(value=paste0(round(100.0*PctHosp, 1), '%'), subtitle='% with Hospice', color='light-blue', 
+             icon=icon('hospital-o'))
+  })
+  output$ValueEOLPassOCM3B <- renderValueBox( {
+    dfep <- filterdfepiB(dfepiB)
+    dfep <- filter(dfep, DiedDuringEpisode==1)
+    dfep$HasHosp3 <- ifelse(dfep$HospiceLOS>=3, 1, 0)
+    PctHosp3 = mean(dfep$HasHosp3)
+    valueBox(value=paste0(round(100.0*PctHosp3, 1), '%'), subtitle='Pass OCM-3 (3+ Days)', color='light-blue', 
+             icon=icon('thumbs-up'))
+  })
+  output$ValueEOLHospicePaidB <- renderValueBox( {
+    dfep <- filterdfepiB(dfepiB)
+    dfep <- filter(dfep, DiedDuringEpisode==1)
+    MeanHospPaid = mean(dfep$HospicePaid)
+    valueBox(value=paste0('$', round(MeanHospPaid,0)), subtitle='$Hospice Per Patient', 
+             color='light-blue', icon=icon('usd'))
+  })
+  output$ValueEOLHospiceSavings0B <- renderValueBox( {
+    dfep <- filterdfepiB(dfepiB)
+    dfep <- filter(dfep, DiedDuringEpisode==1)
+    dfep = filter(dfep, HospiceLOS==0)
+    dfep$Savings = dfep$BaselinePrice - dfep$WinsorizedCost
+    Savings0 = mean(dfep$Savings)
+    valueBox(value=paste0('$', round(Savings0,0)), subtitle='Avg. Savings w/o Hospice', 
+             color='light-blue', icon=icon('money'))
+  })
+  output$ValueEOLHospiceSavings3B <- renderValueBox( {
+    dfep <- filterdfepiB(dfepiB)
+    dfep <- filter(dfep, DiedDuringEpisode==1)
+    dfep = filter(dfep, HospiceLOS>=3)
+    dfep$Savings = dfep$BaselinePrice - dfep$WinsorizedCost
+    Savings3 = mean(dfep$Savings)
+    valueBox(value=paste0('$', round(Savings3,0)), subtitle='Avg. Savings w/ 3+ Days', 
+             color='light-blue', icon=icon('money'))
+  })
+  output$ValueEOLHospiceCost0B <- renderValueBox( {
+    dfep <- filterdfepiB(dfepiB)
+    dfep <- filter(dfep, DiedDuringEpisode==1)
+    dfep = filter(dfep, HospiceLOS==0)
+    Savings0 = mean(dfep$WinsorizedCost)
+    Savings0 = format(round(Savings0,0), big.mark=",", trim=TRUE)
+    valueBox(value=paste0('$', Savings0), subtitle='Avg Cost w/o Hospice', 
+             color='light-blue', icon=icon('money'))
+  })
+  output$ValueEOLHospiceCost3B <- renderValueBox( {
+    dfep <- filterdfepiB(dfepiB)
+    dfep <- filter(dfep, DiedDuringEpisode==1)
+    dfep = filter(dfep, HospiceLOS>=3)
+    Savings3 = mean(dfep$WinsorizedCost)
+    Savings3 = format(round(Savings3,0), big.mark=",", trim=TRUE)
+    valueBox(value=paste0('$', Savings3), subtitle='Avg. Cost w/ 3+ Days', 
              color='light-blue', icon=icon('money'))
   })
   output$EOLDeathCount <- renderPlotly( {
@@ -1645,9 +1746,7 @@ server <- function(input, output) {
     dfw <- dfep %>% group_by(gV) %>% 
       summarise(Deaths = n()) %>% 
       arrange(desc(Deaths))
-    print(names(dfw))
     names(dfw)[names(dfw)=='gV'] <- grpVar
-    print(names(dfw))
     tab12 <- OutputTable(dfw, headerCols = c(grpVar))
     tab12
   })
@@ -1664,11 +1763,20 @@ server <- function(input, output) {
     dfpie2 <- dfpie %>% group_by(gV) %>% 
       summarize(Deaths=sum(Count)) %>% 
       arrange(desc(Deaths))
-    colors <- colorRampPalette(brewer.pal(8, 'Pastel1'))(8)
-    plot_ly(dfpie2, labels=~gV, values=~Deaths, type='pie', opacity=.7,
+    if (grpVar=='AttributedPhysicianName') {
+      names(dfPhysColor)[names(dfPhysColor)=='AttributedPhysicianName']='gV'
+      dfpie2 = left_join(dfpie2, dfPhysColor, by='gV')
+      names(dfpie2)[names(dfpie2)=='PhysicianColor']='SliceColor'
+      dfpie2$SliceColor = ifelse(dfpie2$gV=='Other', '#ffb6c1', dfpie2$SliceColor)
+    }
+    else {
+      colors <- colorRampPalette(brewer.pal(8, 'Pastel1'))(8)
+      dfpie2$SliceColor = colors
+    }
+    plot_ly(dfpie2, labels=~gV, values=~Deaths, type='pie', opacity=.9,
             textposition='inside', textinfo='label+percent', textfont=list(color='white'),
             text=~paste('Deaths:', Deaths), hoverinfo='text', rotation=90,
-            marker=list(color=colors,
+            marker=list(colors=~SliceColor,
                         line=list(width=0)),
             showlegend=FALSE)
   })
@@ -1676,10 +1784,8 @@ server <- function(input, output) {
     dfep <- filterdfepi(dfepi)
     dfep <- filter(dfep, dfep$DiedDuringEpisode==1)
     dfep$OCM3Pass <- ifelse(dfep$HospiceLOS>=3,'Yes', "No'")
-    dfep$Savings = dfep$BaselinePrice - dfep$WinsorizedCost
     dfep <- filter(dfep, dfep$DiedDuringEpisode==1) %>% 
-      select(PatientName, CancerTypeDetailed, AdmitLast14Days, ICULast14Days, OCM3Pass, HospiceLOS,
-             Savings)
+      select(PatientName, CancerTypeDetailed, AdmitLast14Days, ICULast14Days, OCM3Pass, HospiceLOS)
     dfep$AdmitLast14Days <- ifelse(dfep$AdmitLast14Days == 1, 'Yes', 'No')
     dfep$ICULast14Days <- ifelse(dfep$ICULast14Days==1, 'Yes', 'No')
     dfpat <- OutputTable(dfep, headerCols = c('PatientName'))
@@ -1827,6 +1933,14 @@ server <- function(input, output) {
             icon=icon('h-square'))
     
   })
+  output$IBEOLQualityAdmitB <- renderInfoBox( {
+    dfep <- filterdfepiB(dfepiB)
+    dfd <- filter(dfep, DiedDuringEpisode==1)
+    pctAdmit = round(mean(dfd$AdmitLast14Days*100),1)
+    infoBox('Admitted Last 14 Days', value=paste0(pctAdmit, '%'), color='light-blue', fill=TRUE, width=4, 
+            icon=icon('h-square'))
+    
+  })
   output$EOLQualityICU <- renderPlotly( {
     dfep <- filterdfepi(dfepi)
     dfd <- filter(dfep, DiedDuringEpisode==1)
@@ -1870,7 +1984,15 @@ server <- function(input, output) {
     dfd <- filter(dfep, DiedDuringEpisode==1)
     pctICU = round(mean(dfd$ICULast14Days*100,1))
     infoBox('ICU in Last 14 Days', value=paste0(round(mean(dfd$ICULast14Days*100),1), '%'),
-            color='aqua', fill=TRUE, width=4, icon=icon('bed'))
+            color='green', fill=TRUE, width=4, icon=icon('bed'))
+    
+  })
+  output$IBEOLQualityICUB <- renderInfoBox( {
+    dfep <- filterdfepiB(dfepiB)
+    dfd <- filter(dfep, DiedDuringEpisode==1)
+    pctICU = round(mean(dfd$ICULast14Days*100,1))
+    infoBox('ICU in Last 14 Days', value=paste0(round(mean(dfd$ICULast14Days*100),1), '%'),
+            color='light-blue', fill=TRUE, width=4, icon=icon('bed'))
     
   })
   output$EOLQualityChemo <- renderPlotly( {
@@ -1917,6 +2039,14 @@ server <- function(input, output) {
     #pctChemo = round(mean(dfd$ChemoLast14Days,1))
     infoBox('Chemo in Last 14 Days', value=paste0(round(mean(dfd$ChemoLast14Days),1), '%'), 
             color='green', fill=TRUE, width=4, icon=icon('thermometer'))
+  })
+  output$IBEOLQualityChemoB <- renderInfoBox( {
+    dfep <- filterdfepiB(dfepiB)
+    dfd <- filter(dfep, DiedDuringEpisode==1)
+    dfd$ChemoLast14Days = sign(dfd$PartBLast14PaidChemo)*100
+    #pctChemo = round(mean(dfd$ChemoLast14Days,1))
+    infoBox('Chemo in Last 14 Days', value=paste0(round(mean(dfd$ChemoLast14Days),1), '%'), 
+            color='light-blue', fill=TRUE, width=4, icon=icon('thermometer'))
   })
   dfeol <- reactive( {
     dfdied <- read_feather('Output/dfdiedEOL.feather')
@@ -1988,8 +2118,8 @@ server <- function(input, output) {
   })
   #### Simulate results ####
   dfboot <- reactive( {
-    dfep <- filterdfepi(dfepi)
-    dfep2 <- select(dfep, WinsorizedCost, BaselinePrice)
+    dfep <- dfepiB
+    dfep2 <- select(dfepB, WinsorizedCost, BaselinePrice)
     dfep2$Savings <- dfep2$BaselinePrice - dfep2$WinsorizedCost
     sampsize = input$BootSize
     vecPrice = c()
@@ -2004,12 +2134,12 @@ server <- function(input, output) {
     }
     listVec <- list(Price=vecPrice, Cost=vecCost, Savings=vecSave)
     dfboot <- as_tibble(listVec)
-    #return(df)
+    #return(dfboot)
   } )
   # Create volatility reports
   output$BootBar <- renderPlotly( {
-    dfep <- filterdfepi(dfepi)
-    meanSave <- ( mean(dfep$BaselinePrice) - mean(dfep$WinsorizedCost) ) / 2
+    dfep <- dfepiB
+    meanSave <- ( mean(dfepB$BaselinePrice) - mean(dfepB$WinsorizedCost) ) / 2
     dfb <- head(dfboot(), 25)
     dfb$x <- seq(1:nrow(dfb))
     dfb$BarColor = ifelse(dfb$Savings<0, 'red', 'green')
@@ -2084,3 +2214,4 @@ server <- function(input, output) {
     bootControl
   })
 } # close server function
+
