@@ -15,7 +15,7 @@ library(plotly)
 library(googleVis)
 library(tidyverse)
 library(RColorBrewer)
-library(DT)
+library(DT, quietly=TRUE)
 library(sp)
 library(leaflet)
 library(rlang)
@@ -33,6 +33,54 @@ code_hcc <- read_feather('/AdvAnalytics/Reference/code_HCC.feather')
 codeCounty <- read_feather('/AdvAnalytics/Reference/code_FIPSCounty.feather')
 xwZip2County <- read_feather('/AdvAnalytics/Reference/xw_ZipCode2County.feather')
 codeCounty <- read_feather('/AdvAnalytics/Reference/code_FIPSCounty.feather')
+dfepi <- read_feather('dfepisummary.feather') 
+dfepi$CancerTypeDetailed=dfepi$CancerType
+dfepi$Constant = 'Y'
+dfepi$DrugPaid = ( dfepi$PartBTOSPaidDrugs + dfepi$PartBTOSPaidChemo + 
+                     dfepi$PartDChemoPaid + dfepi$PartDNonChemoPaid + 
+                     dfepi$DMEDrugPaid + dfepi$DMENonDrugPaid)
+dfepi$DrugPaidBenchmark = (dfepi$PartBTOSPaidDrugsBenchmark + dfepi$PartBTOSPaidChemoBenchmark +
+                             dfepi$PartDChemoPaidBenchmark + dfepi$PartDNonChemoPaidBenchmark + 
+                             dfepi$DMEDrugPaidBenchmark + dfepi$DMENonDrugPaidBenchmark)
+dfepi$CalendarYear = format(dfepi$EpiStart, '%Y')
+#dfepi$Savings <- dfepi$BaselinePrice - dfepi$WinsorizedCost
+dfepi$OutlierPaid <- dfepi$ActualCost - dfepi$WinsorizedCost
+dfepi$IsOutlier <- ifelse(dfepi$ActualCost>dfepi$WinsorizedCost, 100, 0)
+dfepi$HasAdmit <- sign(dfepi$IPAdmits)
+dfepi$Age = floor(as.numeric(dfepi$EpiStart - dfepi$BirthDate) / 365.25)
+dfepiB <- read_feather(paste0(basewd, 'Output/dfepi.feather'))
+dfepi$Constant = 'Y'
+dfepiB$DrugPaid = ( dfepiB$PartBTOSPaidDrugs + dfepiB$PartBTOSPaidChemo + 
+                      dfepiB$PartDChemoPaid + dfepiB$PartDNonChemoPaid + 
+                      dfepiB$DMEDrugPaid + dfepiB$DMENonDrugPaid)
+dfepiB$DrugPaidBenchmark = (dfepiB$PartBTOSPaidDrugsBenchmark + dfepiB$PartBTOSPaidChemoBenchmark +
+                              dfepiB$PartDChemoPaidBenchmark + dfepiB$PartDNonChemoPaidBenchmark + 
+                              dfepiB$DMEDrugPaidBenchmark + dfepiB$DMENonDrugPaidBenchmark)
+dfepiB$CalendarYear = format(dfepiB$EpiStart, '%Y')
+dfepiB$Savings <- dfepiB$BaselinePrice - dfepiB$WinsorizedCost
+dfepiB$OutlierPaid <- dfepiB$ActualCost - dfepiB$WinsorizedCost
+dfepiB$IsOutlier <- ifelse(dfepiB$ActualCost>dfepiB$WinsorizedCost, 100, 0)
+dfepiB$HasAdmit <- sign(dfepiB$IPAdmits)
+dfepB = dfepiB
+dfdied <- filter(dfepi, (DeathDate>=EpiStart) & (DeathDate<=EpiEnd))
+dfdiedB <- filter(dfepiB, (DeathDate>=EpiStart) & (DeathDate<=EpiEnd))
+dfPhysColor = attachColors(dfepi, dfepiB, 'AttributedPhysicianName')
+dfep <- dfepi
+dfepNarrow = dfep %>% select('EpiNum', 'AttributedPhysicianName', 'ActualCost', 'CancerType', 'CancerTypeDetailed')
+dfip <- read_feather('dfip2.feather')
+dfie  <- read_feather('dfie.feather')
+dfie <- distinct(dfie, PatientName, EpiNum, CCN, RevCodeDate, .keep_all=TRUE)
+dfie$SentHome <- ifelse(dfie$ClaimType=='Sent Home', 100, 0)
+dfie$Admitted <- ifelse(dfie$ClaimType=='Admitted', 100, 0)
+dfie$Transfer <- ifelse(dfie$ClaimType=='Transfer', 100, 0)
+dfie = merge(dfie, dfepNarrow, by='EpiNum', all.x=TRUE)
+dfieB <- read_feather(paste0(basewd, 'Output/dfie.feather'))
+dfieB <- distinct(dfieB, PatientName, EpiNum, CCN, RevCodeDate, .keep_all=TRUE)
+dfieB$SentHome <- ifelse(dfieB$ClaimType=='Sent Home', 100, 0)
+dfieB$Admitted <- ifelse(dfieB$ClaimType=='Admitted', 100, 0)
+dfieB$Transfer <- ifelse(dfieB$ClaimType=='Transfer', 100, 0)
+vecCCS <- unique(dfie$CCS_lbl)
+
 
 
 #### Set fonts ####

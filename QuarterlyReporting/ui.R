@@ -23,7 +23,8 @@ ui <- dashboardPage(
                    selectInput('TOSGroupBy', label='Y-Axis Groups', 
                                choices=c('CancerTypeDetailed', 
                                          'AttributedPhysicianName',
-                                         'CalendarYear'),
+                                         'CalendarYear',
+                                         'No Grouping'),
                                selected='AttributedPhysicianName'),
                    selectInput('TOSSortBy', label='Sort Data By',
                                choices=c('MeanCost', 'TotalCost', 'Inpat', 'PartBDrugs', 
@@ -152,9 +153,9 @@ ui <- dashboardPage(
                            column(3, HTML("<H4>Select variable to map: </H4>")),
                            column(2, selectInput("KeyStatVar", label=NULL, 
                                                  choices=c('Episodes', 'AdmitsPerEpisode', 'ERVisitsPerEpisode',
-                                                           'MeanSavings', 'DrugsPaid', 'DrugSavings', 'InpatPaid',
+                                                           'DrugsPaid', 'DrugSavings', 'InpatPaid',
                                                            'InpatSavings', 'TestingPaid', 'TestingSavings'), 
-                                                 selected='MeanSavings')),
+                                                 selected='Episodes')),
                            column(1, HTML('')),
                            column(4, HTML('<H4>Mininum Episodes in Geographic Area:')),
                            column(1, numericInput('GeoMinEpis', label=NULL, value = 10))
@@ -267,9 +268,11 @@ ui <- dashboardPage(
                                 )
                          ),
                          column(9, 
-                                box(solidHeader=FALSE, title='Cost by Type of Service',
-                                    status='primary', width=NULL,
-                                    plotlyOutput('TOSStack', height='680px') )
+                                tabBox(title='Cost by Type of Service', side='left', selected='Performance Period',
+                                       height='800px', width=12,
+                                       tabPanel('Performance Period', plotlyOutput('TOSStack', height='710px')),
+                                       tabPanel('Compare to Baseline', plotlyOutput('TOSChange', height='710px'))
+                                )
                          ) # close column
                 ),
                 #### ER Tab ####
@@ -283,17 +286,25 @@ ui <- dashboardPage(
                            valueBoxOutput('ValueERTrans',  width=2)
                          ),
                          fluidRow(
-                           column(2, style = "background-color:#ffe6cc;",
-                                  selectInput('ieHosp', 'Hospital to Include', potentialHosp, 
-                                              selected=NULL, multiple=TRUE),
-                                  selectInput('ieCCS', 'Diag Group Filter', vecCCS, 
-                                              selected=NULL, multiple = TRUE),
-                                  selectInput('ieGrp', 'Variable to Group Reports By:', 
+                           valueBoxOutput('ValueERVisitsB', width=2),
+                           valueBoxOutput('ValueERPaidB',   width=2),
+                           valueBoxOutput('ValueERPaidPerVisitB', width=2),
+                           valueBoxOutput('ValueERPctHomeB', width=2),
+                           valueBoxOutput('ValueERAdmitB',  width=2),
+                           valueBoxOutput('ValueERTransB',  width=2)
+                         ),
+                         fluidRow(style = "background-color:#ffe6cc;",
+                                  column(4, selectInput('ieHosp', 'Hospital to Include', potentialHosp, 
+                                              selected=NULL, multiple=TRUE)),
+                                  column(4, selectInput('ieCCS', 'Diag Group Filter', vecCCS, 
+                                              selected=NULL, multiple = TRUE)),
+                                  column(4, selectInput('ieGrp', 'Variable to Group Reports By:', 
                                               choices=c('CCS_lbl','CCN_lbl', 
                                                         'AttributedPhysicianName', 'CancerTypeDetailed'),
-                                              selected='CCS_lbl')
-                           ),
-                           column(6, 
+                                              selected='CCN_lbl'))
+                         ),
+                         fluidRow(
+                           column(7, 
                                   tabBox(
                                     title='Discharge Site Mix',
                                     side='left', width=12,
@@ -303,7 +314,7 @@ ui <- dashboardPage(
                                     tabPanel('Claims', DT::dataTableOutput('ERPatientsTab', height='680px'))
                                   )
                            ),
-                           column(4, 
+                           column(5, 
                                   tabBox(
                                     title='ER Statistics',
                                     side='left', width=12,
@@ -317,7 +328,7 @@ ui <- dashboardPage(
                 tabPanel('Inpatient',
                          column(6,
                                 tabBox(title=HTML('<H3>Admission Rate</h3>'),
-                                       side='left', width=12, selected='# of Admits', height='660px',
+                                       side='left', width=12, selected='# of Admits', height='700px',
                                        tabPanel('# of Admits',
                                                 tabBox(title='# of Admits', side='left', width=12, selected='Pie of Count',
                                                        tabPanel('Pie of Count', plotlyOutput('IPPie')),
@@ -342,8 +353,8 @@ ui <- dashboardPage(
                                 )
                          ),
                          column(6, 
-                                tabBox(title=HTML('<H3>Hospital Stats</h3>'),
-                                       side='left', width=12, selected='Chart', height='660px',
+                                tabBox(title=HTML('<H3>Admission Type by Hospital</h3>'),
+                                       side='left', width=12, selected='Chart', height='700px',
                                        tabPanel('Chart', plotlyOutput('IPHospBar')),
                                        tabPanel('Table', DT::dataTableOutput('IPHospTab'))
                                 )
@@ -426,7 +437,7 @@ ui <- dashboardPage(
                                   tabPanel('Chemo', plotlyOutput('EOLQualityChemo', height='450px'))
                            )
                          )
-                )#,
+                ),
                 #### Simulation Tab ####
                 # tabPanel('Simulation',
                     #      # Settings and instructions ####
@@ -462,7 +473,8 @@ ui <- dashboardPage(
                     #     )
                     # )
             #)
-            
+            #### Documentation ####
+            tabPanel('Documentation', includeHTML('/AdvAnalytics/ShinyApps/QuarterlyReporting/documentation.html'))            
     ) # close tabsetPanel
   ) # close dashboardBody
 ) # close dashboardPage

@@ -1,42 +1,3 @@
-#### Read data and prepare it for analysis.####
-dfepi <- read_feather('dfepisummary.feather') 
-dfepi$DrugPaid = ( dfepi$PartBTOSPaidDrugs + dfepi$PartBTOSPaidChemo + 
-                     dfepi$PartDChemoPaid + dfepi$PartDNonChemoPaid + 
-                     dfepi$DMEDrugPaid + dfepi$DMENonDrugPaid)
-dfepi$DrugPaidBenchmark = (dfepi$PartBTOSPaidDrugsBenchmark + dfepi$PartBTOSPaidChemoBenchmark +
-                             dfepi$PartDChemoPaidBenchmark + dfepi$PartDNonChemoPaidBenchmark + 
-                             dfepi$DMEDrugPaidBenchmark + dfepi$DMENonDrugPaidBenchmark)
-dfepi$CalendarYear = format(dfepi$EpiStart, '%Y')
-#dfepi$Savings <- dfepi$BaselinePrice - dfepi$WinsorizedCost
-dfepi$OutlierPaid <- dfepi$ActualCost - dfepi$WinsorizedCost
-dfepi$IsOutlier <- ifelse(dfepi$ActualCost>dfepi$WinsorizedCost, 100, 0)
-dfepi$HasAdmit <- sign(dfepi$IPAdmits)
-dfepi$Age = floor(as.numeric(dfepi$EpiStart - dfepi$BirthDate) / 365.25)
-dfepiB <- read_feather(paste0(basewd, 'Output/dfepi.feather'))
-dfepiB$DrugPaid = ( dfepiB$PartBTOSPaidDrugs + dfepiB$PartBTOSPaidChemo + 
-                     dfepiB$PartDChemoPaid + dfepiB$PartDNonChemoPaid + 
-                     dfepiB$DMEDrugPaid + dfepiB$DMENonDrugPaid)
-dfepiB$DrugPaidBenchmark = (dfepiB$PartBTOSPaidDrugsBenchmark + dfepiB$PartBTOSPaidChemoBenchmark +
-                             dfepiB$PartDChemoPaidBenchmark + dfepiB$PartDNonChemoPaidBenchmark + 
-                             dfepiB$DMEDrugPaidBenchmark + dfepiB$DMENonDrugPaidBenchmark)
-dfepiB$CalendarYear = format(dfepiB$EpiStart, '%Y')
-dfepiB$Savings <- dfepiB$BaselinePrice - dfepiB$WinsorizedCost
-dfepiB$OutlierPaid <- dfepiB$ActualCost - dfepiB$WinsorizedCost
-dfepiB$IsOutlier <- ifelse(dfepiB$ActualCost>dfepiB$WinsorizedCost, 100, 0)
-dfepiB$HasAdmit <- sign(dfepiB$IPAdmits)
-dfdied <- filter(dfepi, (DeathDate>=EpiStart) & (DeathDate<=EpiEnd))
-dfdiedB <- filter(dfepiB, (DeathDate>=EpiStart) & (DeathDate<=EpiEnd))
-dfPhysColor = attachColors(dfepi, dfepiB, 'AttributedPhysicianName')
-dfep <- dfepi
-#dfip <- read_feather('Output/dfip4PowerBI.feather')
-dfie  <- read_feather('dfie.feather')
-dfie <- distinct(dfie, PatientName, EpiNum, CCN, RevCodeDate, .keep_all=TRUE)
-dfie$SentHome <- ifelse(dfie$ClaimType=='Sent Home', 100, 0)
-dfie$Admitted <- ifelse(dfie$ClaimType=='Admitted', 100, 0)
-dfie$Transfer <- ifelse(dfie$ClaimType=='Transfer', 100, 0)
-vecCCS <- unique(dfie$CCS_lbl)
-
-
 #### Server Section ####
 server <- function(input, output) {  
   #### Functions to read data files ####
@@ -393,7 +354,6 @@ server <- function(input, output) {
         select(AttributedPhysicianName, EpisodesPerf, EpisodesBase,
                AdmitRatePerf, AdmitRateBase, ERRatePerf, ERRateBase,
                DeathsPerf, DeathsBase, OCM3Perf, OCM3Base)
-      print(names(df))
       df = df %>% 
         rename(
           `Attributed Physician` = AttributedPhysicianName,
@@ -420,7 +380,6 @@ server <- function(input, output) {
         Episodes=n(),
         AdmitsPerEpisode=mean(IPAdmits),
         ERVisitsPerEpisode=mean(ERVisits),
-        MeanSavings=mean(Savings),
         DrugsPaid=mean(DrugPaid),
         DrugSavings=mean(DrugPaidBenchmark) - mean(DrugPaid),
         InpatPaid=mean(IPTotalPaid),
@@ -429,12 +388,10 @@ server <- function(input, output) {
         TestingSavings = mean(PartBTOSPaidLabBenchmark) + mean(PartBTOSPaidImagingBenchmark) - mean(PartBTOSPaidLab) + mean(PartBTOSPaidImaging)
       ) 
     dfw = dfw %>% filter(Episodes>=input$GeoMinEpis)
-    print(nrow(dfw))
     subdat <- ZipShape()
     subdat<-subdat[subdat$GEOID10 %in% dfw$ZipCode,]
-    print(nrow(dfw))
     dfw <- merge(subdat, dfw, by.x='GEOID10', by.y='ZipCode')
-    print(nrow(dfw)) 
+    print(input$KeyStatVar)
     #zipcodeMap <- zipMap(dfw, dfName='dfw', Var='MeanSavings', digits=0, varlabel='w')
     zipcodeMap <- zipMap(dfw, dfName='dfw', Var=input$KeyStatVar, digits=0, varlabel='w')
     zipcodeMap
@@ -446,7 +403,6 @@ server <- function(input, output) {
         Episodes=n(),
         AdmitsPerEpisode=mean(IPAdmits),
         ERVisitsPerEpisode=mean(ERVisits),
-        MeanSavings=mean(Savings),
         DrugsPaid=mean(DrugPaid),
         DrugSavings=mean(DrugPaidBenchmark) - mean(DrugPaid),
         InpatPaid=mean(IPTotalPaid),
@@ -466,7 +422,6 @@ server <- function(input, output) {
         Episodes=n(),
         AdmitsPerEpisode=mean(IPAdmits),
         ERVisitsPerEpisode=mean(ERVisits),
-        MeanSavings=mean(Savings),
         DrugsPaid=mean(DrugPaid),
         DrugSavings=mean(DrugPaidBenchmark) - mean(DrugPaid),
         InpatPaid=mean(IPTotalPaid),
@@ -492,7 +447,6 @@ server <- function(input, output) {
         Episodes=n(),
         AdmitsPerEpisode=mean(IPAdmits),
         ERVisitsPerEpisode=mean(ERVisits),
-        MeanSavings=mean(Savings),
         DrugsPaid=mean(DrugPaid),
         DrugSavings=mean(DrugPaidBenchmark) - mean(DrugPaid),
         InpatPaid=mean(IPTotalPaid),
@@ -1005,8 +959,9 @@ server <- function(input, output) {
     outTab <- OutputTable(dfep, headerCols = c('EpiNum', 'PatientName')) 
     outTab
   })
+  #### Financial Tab ####
+  
   #### TOS Tab Outputs ####
-  # TODO... Make stack colors match pie colors
   output$TOSStack <- renderPlotly( { 
     grpVar <- input$TOSGroupBy
     srtVar <- input$TOSSortBy
@@ -1159,6 +1114,108 @@ server <- function(input, output) {
                  barmode = 'stack', 
                  margin=list(l=170))
   }) # close TOSstack
+  output$TOSChange <- renderPlotly( {
+    dfep = filterdfepi(dfepi)
+    dftos <- select(dfep, 'ActualCost', "EpiStart", "EpiEnd", "CancerType", 
+                    "Procs" = "PartBTOSPaidProcedures",
+                    "PartBDrugs"="PartBTOSPaidDrugs", "PartBTOSPaidImaging", "PartBTOSPaidLab",
+                    "E_M"="PartBTOSPaidE&M", "PartBTOSPaidOther", "PartBTOSPaidChemo", 
+                    "RadOnc"="PartBTOSPaidRadOnc", "PartBTOSPaidDME", "PartBTOSPaidEmerg",
+                    "Inpat"="IPTotalPaid", "SNFPaid", "HHAPaid", "Hospice"="HospicePaid", "PartDChemoPaid", 
+                    "PartDNonChemoPaid", "DMEDrugPaid", "DMENonDrugPaid", "AttributedPhysicianName")
+    dftos <- dftos %>% as_tibble() %>% mutate(
+      PartBDrugs = PartBDrugs + DMEDrugPaid + PartBTOSPaidChemo,
+      Testing = PartBTOSPaidLab + PartBTOSPaidImaging,
+      Other = PartBTOSPaidEmerg + PartBTOSPaidDME + PartBTOSPaidOther + DMENonDrugPaid,
+      PostAcute = SNFPaid + HHAPaid,
+      Orals = PartDChemoPaid + PartDNonChemoPaid,
+      CalendarYear = format(EpiStart, '%Y')
+    )
+    dropCols = c("DMEDrugPaid", "PartBTOSPaidDME", "PartBTOSPaidChemo",
+                 "PartBTOSPaidImaging", "PartBTOSPaidEmerg", "PartBTOSPaidLab", "DMENonDrugPaid",
+                 "PartBTOSPaidOther", "SNFPaid", "HHAPaid", "PartDChemoPaid", "PartDNonChemoPaid")
+    dftos <- dftos %>% dplyr::select(-one_of(dropCols))
+    dftos <- dftos %>% replace_na(list(Procs=0, PartBDrugs=0, Inpat=0, Hospice=0, Testing=0, 
+                                       Other=0, PostAcute=0, Orals=0, E_M=0, RadOnc=0))
+    dfsum <- dftos %>%  
+      summarize(E_M = mean(E_M),
+                PartBDrugs=mean(PartBDrugs),
+                Orals=mean(Orals),
+                Inpat=mean(Inpat),
+                Testing=mean(Testing),
+                RadOnc=mean(RadOnc),
+                Procs=mean(Procs),
+                Hospice=mean(Hospice),
+                PostAcute=mean(PostAcute),
+                Other=mean(Other)
+      )
+    dfw1 = gather(dfsum, 'CostType', 'Performance', 'E_M':'Other')
+    dfep <- filterdfepiB(dfepiB)
+    dftosB <- select(dfepB, 'ActualCost', "EpiStart", "EpiEnd", "CancerType", 
+                     "Procs" = "PartBTOSPaidProcedures",
+                     "PartBDrugs"="PartBTOSPaidDrugs", "PartBTOSPaidImaging", "PartBTOSPaidLab",
+                     "E_M"="PartBTOSPaidE&M", "PartBTOSPaidOther", "PartBTOSPaidChemo", 
+                     "RadOnc"="PartBTOSPaidRadOnc", "PartBTOSPaidDME", "PartBTOSPaidEmerg",
+                     "Inpat"="IPTotalPaid", "SNFPaid", "HHAPaid", "Hospice"="HospicePaid", "PartDChemoPaid", 
+                     "PartDNonChemoPaid", "DMEDrugPaid", "DMENonDrugPaid", "AttributedPhysicianName")
+    dftosB <- dftosB %>% as_tibble() %>% mutate(
+      PartBDrugs = PartBDrugs + DMEDrugPaid + PartBTOSPaidChemo,
+      Testing = PartBTOSPaidLab + PartBTOSPaidImaging,
+      Other = PartBTOSPaidEmerg + PartBTOSPaidDME + PartBTOSPaidOther + DMENonDrugPaid,
+      PostAcute = SNFPaid + HHAPaid,
+      Orals = PartDChemoPaid + PartDNonChemoPaid,
+      CalendarYear = format(EpiStart, '%Y')
+    )
+    dropCols = c("DMEDrugPaid", "PartBTOSPaidDME", "PartBTOSPaidChemo",
+                 "PartBTOSPaidImaging", "PartBTOSPaidEmerg", "PartBTOSPaidLab", "DMENonDrugPaid",
+                 "PartBTOSPaidOther", "SNFPaid", "HHAPaid", "PartDChemoPaid", "PartDNonChemoPaid")
+    dftosB <- dftosB %>% dplyr::select(-one_of(dropCols))
+    dftosB <- dftosB %>% replace_na(list(Procs=0, PartBDrugs=0, Inpat=0, Hospice=0, Testing=0, 
+                                         Other=0, PostAcute=0, Orals=0, E_M=0, RadOnc=0))
+    dfsumB <- dftosB %>%  
+      summarize(E_M = mean(E_M),
+                PartBDrugs=mean(PartBDrugs),
+                Orals=mean(Orals),
+                Inpat=mean(Inpat),
+                Testing=mean(Testing),
+                RadOnc=mean(RadOnc),
+                Procs=mean(Procs),
+                Hospice=mean(Hospice),
+                PostAcute=mean(PostAcute),
+                Other=mean(Other)
+      )
+    dfwB = gather(dfsumB, 'CostType', 'Baseline', 'E_M':'Other')
+    
+    dfw = merge(dfw1, dfwB)
+    dfc = read_feather('/AdvAnalytics/OCM/Reference/dfTOSColors.feather')
+    dfw = merge(dfw, dfc) %>% arrange(desc(Performance))
+    plot_ly(dfw, x=~CostType) %>%
+      add_trace(type='bar', y=~Performance, name='Performance', opacity=0.7,
+                text=~paste('<b><i>Performance Period</b></i>',
+                            '<BR>Mean Cost: $', format(round(Performance,0), big.mark=",", trim=TRUE)),
+                hoverinfo='text', marker=list(color=~TOSColor)) %>%
+      add_trace(type='bar', y=~Baseline, name='Baseline', opacity=0.4,
+                text=~paste('<b><i>Baseline Period</b></i>',
+                            '<BR>Mean Cost: $', format(round(Baseline,0), big.mark=",", trim=TRUE)),
+                hoverinfo='text', marker=list(color=~TOSColor)) %>%
+      layout(title='',
+             xaxis=list(title='', 
+                        categoryarray=~Performance, 
+                        categoryorder='array',
+                        showticklabels=TRUE, 
+                        showgrid=FALSE, 
+                        titlefont=font1, 
+                        tickfont=fontNarrow), 
+             yaxis=list(title='$Cost Per Episode', 
+                        showticklabels=TRUE, 
+                        tickfont = fontNarrow,
+                        ticklen=0,
+                        zeroline=FALSE,
+                        separatethousands=TRUE,
+                        showline=FALSE),
+             barmode = 'group',
+             margin=list(b=60))
+  })
   output$TOSPie <- renderPlotly( { 
     dfep = filterdfepi(dfepi)
     pieTOS(df=dfep, opaq=0.7) 
@@ -1179,7 +1236,7 @@ server <- function(input, output) {
         PctHome = mean(SentHome),
         PctAdmit= mean(Admitted),
         PctTrans= mean(Transfer),
-        MeanActualCost = mean(ActualCost),
+        # MeanActualCost = mean(ActualCost),
         ERVisits = n()
       )
     dfwrk <- arrange(dfwrk, desc(ERVisits)) %>% head(20)
@@ -1210,10 +1267,10 @@ server <- function(input, output) {
                             zeroline=FALSE,
                             showline=FALSE),
                  barmode = 'stack', 
-                 margin=list(l=150))
+                 margin=list(l=170))
   } )
   output$ERDischargeTab <- DT::renderDataTable( {
-    dfie <- filterdfepi(dfie)
+    dfi <- filterdfepi(dfie)
     dfie2 <- filterER(dfie2)
     # grpVar <- input$ieGrp
     names(dfi)[names(dfi)==input$ieGrp] <- 'YV'
@@ -1222,7 +1279,7 @@ server <- function(input, output) {
         PctHome = mean(SentHome)/100,
         PctAdmit= mean(Admitted)/100,
         PctTrans= mean(Transfer)/100,
-        MeanActualCost = mean(ActualCost),
+        #MeanActualCost = mean(ActualCost),
         ERVisits = n()
       )
     dfwrk <- arrange(dfwrk, desc(ERVisits)) %>% head(30)
@@ -1232,6 +1289,7 @@ server <- function(input, output) {
   output$ERPatientsTab <- DT::renderDataTable( {
     dfie2 <- filterdfepi(dfie)
     dfi <- filterER(dfie2)
+    print(names(dfi))
     dfw <- select(dfi, 'PatientName', 'RevCodeDate', 'CCN_lbl', 'CCS_lbl', 'ClaimType', 
                   'AttributedPhysicianName', 'CancerTypeDetailed')
     dfw <- arrange(dfw, PatientName, RevCodeDate) 
@@ -1256,20 +1314,20 @@ server <- function(input, output) {
     dfie2 <- filterdfepi(dfie)
     dfi <- filterER(dfie2)
     ERvis <- nrow(dfi)
-    valueBox(value=ERvis, subtitle='# of ER Visits', color='light-blue', 
+    valueBox(value=ERvis, subtitle='# of ER Visits', color='green', 
              icon=icon('ambulance'))
   })
   output$ValueERPaid <- renderValueBox({
     dfie2 <- filterdfepi(dfie)
     dfi <- filterER(dfie2)
     valueBox(value=paste('$', round(sum(dfi$Paid, na.rm=T)/1e6,1), 'M'), 
-             subtitle='$Paid, includes Admit', color='light-blue', icon=icon('money'))
+             subtitle='$Paid, includes Admit', color='green', icon=icon('money'))
   })
   output$ValueERPaidPerVisit <- renderValueBox({
     dfie2 <- filterdfepi(dfie)
     dfi <- filterER(dfie2)
     ERvalPaidVisit <- paste('$', round(mean(dfi$Paid, na.rm=T)))
-    valueBox(value=ERvalPaidVisit, subtitle='$Paid Per Visit', color='light-blue', 
+    valueBox(value=ERvalPaidVisit, subtitle='$Paid Per Visit', color='green', 
              icon=icon('usd'))
   })
   output$ValueERPctHome <- renderValueBox({
@@ -1277,7 +1335,7 @@ server <- function(input, output) {
     dfi <- filterER(dfie2)
     ERvalHome <- round(mean(dfi$SentHome, na.rm=TRUE),1)
     ERvalHome <- paste(as.character(ERvalHome), '%')
-    valueBox(value=ERvalHome, subtitle='% Discharged Home', color='light-blue', 
+    valueBox(value=ERvalHome, subtitle='% Discharged Home', color='green', 
              icon=icon('car'))
   })
   output$ValueERAdmit <- renderValueBox({
@@ -1285,12 +1343,56 @@ server <- function(input, output) {
     dfi <- filterER(dfie2)
     ERvalAdmit <- round(mean(dfi$Admitted),1)
     ERvalAdmit <- paste(as.character(ERvalAdmit), '%')
-    valueBox(value=ERvalAdmit, subtitle='% Admitted', color='light-blue', 
+    valueBox(value=ERvalAdmit, subtitle='% Admitted', color='green', 
              icon=icon('bed'))
   })
   output$ValueERTrans <- renderValueBox({
     dfie2 <- filterdfepi(dfie)
     dfi <- filterER(dfie2)
+    ERvalTrans <- round(mean(dfi$Transfer),1)
+    ERvalTrans <- paste(as.character(ERvalTrans), '%')
+    valueBox(value=ERvalTrans, subtitle='% Transferred', color='green', 
+             icon=icon('road'))
+  })
+  output$ValueERVisitsB <- renderValueBox({
+    dfie2 <- filterdfepiB(dfieB)
+    dfi <- filterERB(dfie2)
+    ERvis <- nrow(dfi)
+    valueBox(value=ERvis, subtitle='# of ER Visits', color='light-blue', 
+             icon=icon('ambulance'))
+  })
+  output$ValueERPaidB <- renderValueBox({
+    dfie2 <- filterdfepiB(dfieB)
+    dfi <- filterERB(dfie2)
+    valueBox(value=paste('$', round(sum(dfi$Paid, na.rm=T)/1e6,1), 'M'), 
+             subtitle='$Paid, includes Admit', color='light-blue', icon=icon('money'))
+  })
+  output$ValueERPaidPerVisitB <- renderValueBox({
+    dfie2 <- filterdfepiB(dfieB)
+    dfi <- filterERB(dfie2)
+    ERvalPaidVisit <- paste('$', round(mean(dfi$Paid, na.rm=T)))
+    valueBox(value=ERvalPaidVisit, subtitle='$Paid Per Visit', color='light-blue', 
+             icon=icon('usd'))
+  })
+  output$ValueERPctHomeB <- renderValueBox({
+    dfie2 <- filterdfepiB(dfieB)
+    dfi <- filterERB(dfie2)
+    ERvalHome <- round(mean(dfi$SentHome, na.rm=TRUE),1)
+    ERvalHome <- paste(as.character(ERvalHome), '%')
+    valueBox(value=ERvalHome, subtitle='% Discharged Home', color='light-blue', 
+             icon=icon('car'))
+  })
+  output$ValueERAdmitB <- renderValueBox({
+    dfie2 <- filterdfepiB(dfieB)
+    dfi <- filterERB(dfie2)
+    ERvalAdmit <- round(mean(dfi$Admitted),1)
+    ERvalAdmit <- paste(as.character(ERvalAdmit), '%')
+    valueBox(value=ERvalAdmit, subtitle='% Admitted', color='light-blue', 
+             icon=icon('bed'))
+  })
+  output$ValueERTransB <- renderValueBox({
+    dfie2 <- filterdfepiB(dfieB)
+    dfi <- filterERB(dfie2)
     ERvalTrans <- round(mean(dfi$Transfer),1)
     ERvalTrans <- paste(as.character(ERvalTrans), '%')
     valueBox(value=ERvalTrans, subtitle='% Transferred', color='light-blue', 
@@ -1299,6 +1401,7 @@ server <- function(input, output) {
   output$ERMap <- renderLeaflet({
     dfi <- filterdfepi(dfie)
     dfi <- filterER(dfi)
+    totRows=nrow(dfi)
     dfmap <- dfi %>% group_by(CCN) %>% 
       summarise(
         ERVisits=n(),
@@ -1306,7 +1409,7 @@ server <- function(input, output) {
         PctAdmit=mean(Admitted),
         PctTrans=mean(Transfer),
         PaidPerVisit=mean(Paid, na.rm=TRUE)
-      ) %>% filter(ERVisits>=10)
+      ) %>% filter(ERVisits>=5)
     dfCCNGeo <- read_feather('/AdvAnalytics/Reference/xw_CCN2LatLong.feather')
     dfxwCCN <- read_feather('/AdvAnalytics/Reference/code_CCN.feather')
     dfmap <- merge(dfmap, dfCCNGeo, by='CCN', all.x=TRUE)
@@ -1316,7 +1419,7 @@ server <- function(input, output) {
     pal <- colorNumeric(palette='RdYlGn', domain=dfmap$PctHome)
     leaflet(data=dfmap) %>% 
       addProviderTiles(providers$OpenMapSurfer.Roads) %>% 
-      addCircleMarkers(lng=~Longitude, lat=~Latitude, radius=round(dfmap$ERVisits^.6/2, 1),
+      addCircleMarkers(lng=~Longitude, lat=~Latitude, radius=round(dfmap$ERVisits^.6*600/totRows, 1),
                        fillOpacity=0.7, fillColor=~pal(PctHome), weight=0, layerId=~CCN,
                        popup=~paste('<H4>', CCN_lbl, '</H4>',
                                     'ER Visits  : <b>', ERVisits,
@@ -1372,14 +1475,16 @@ server <- function(input, output) {
   output$IPAdmitBenchmark <- renderPlotly({
     grpVar <- input$TOSGroupBy
     dfep <- filterdfepi(dfepi)
-    dfben <- aggQuality(dfep, var='IPAdmits', grp=input$TOSGroupBy)
+    dfepB = filterdfepiB(dfepiB)
+    dfben <- aggQuality(dfep, dfB=dfepB, var='IPAdmits', grp=input$TOSGroupBy)
     benchart <- barVsBenchmark(df=dfben, var='IPAdmits', grp=input$TOSGroupBy, color='#7ac043', xlabel='# of Admits')
     benchart
   })
   output$IPBenchTable <- DT::renderDataTable( {
     grpVar <- input$TOSGroupBy
     dfep <- filterdfepi(dfepi)
-    dfben <- aggQuality(dfep, var='IPAdmits', grp=grpVar) %>% 
+    dfepB = filterdfepiB(dfepiB)
+    dfben <- aggQuality(dfep, dfB=dfepB, var='IPAdmits', grp=grpVar) %>% 
       arrange(desc(Episodes))
     if (max(dfben$IPAdmits)  > 15) {
       dfben$IPAdmits <- round(dfben$IPAdmits /100,3)

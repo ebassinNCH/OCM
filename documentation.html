@@ -1,0 +1,222 @@
+<html>
+<head>
+<style>
+h1   {color: #7ac043;}
+h2   {color: #437ac0;}
+h3   {color: #c08943;}
+h4   {color: #8943c0;}
+br {
+  content: "";
+  margin: 2em;
+  display: block;
+  font-size: 24%;
+}</style>
+</head>
+<body>
+<h1>General Functionality</h1>
+<h2>Applying Filters</h2>
+<h2>Manipulating Charts</h2>
+
+<h1>Reports</h1>
+
+<h2>KPI Tab</h2>
+This tab contains high level summary information for key measures across multiple domains.  It is designed to give users a sense for how the practice is performing in general.  More detailed information about the different domains can be found on other tabs.<br>
+
+Physician, cancer type, and episode start date filters from the left panel can be used to restrict the episodes that are evaluated.  For instance, if you select "Lung Cancer" from the <em>Cancer Type</em> filter, all reports will be limited to episodes stamped with a cancer type of "Lung Cancer" per OCM rules.  Note that the software does not currently allow you to restrict dates in the performance period.<br>        
+
+<h3>High level statistics</h3>
+The top two rows provide a number of high level statistics about the practice.  The top row of stats, with a green background, reflect the performance during the performance period.  (One can filter the dates in the performance period by using the date selector in the black panel on the left side of the screen.)  The bottom row of stats, with a green background, contains the same measure over the entire baseline period.<br>
+
+<strong># of Episodes</strong>  The number of episodes is a count of the number of distinct episodes that <em>started</em> during the period.  Only episodes with a start date in the date range are counted.<br>
+
+<strong># of Patients</strong>  The number of patients is a count of the number of distinct patients who had episodes that started during the date range.  When the date range is longer than 6 month, it is possible for patients to have more than 1 episode, so the number of episodes will always be greater than or equal to the number of patients.<br>
+
+<strong>Average Age</strong>  The statistical mean age of patients on the start the episodes during the period.  Note that patients who have multiple episodes will be counted once for each episode, using their age on the start date of each episode.<br>
+
+<b># of Providers</b>  Every episode has a single provider attributed to it as the "attributed physician."  A count of the number of unique NPI codes assign to episodes that match the filters.  Note that during the performance period, we sometimes find episodes that are assigned to your practice but do not have any E&M codes.  Those episodes are given a <i>Null</i> provider ID.  We count the null provider ID as a unique provider.<br>
+
+<strong>Winsorized $Spend</strong>This is the paid amount, adjusted for Winsorization, for all episodes that satisfy the filtering criteria (attributed physician, cancer type, and episode start date) that you have selected in the black panel.  <a href="#Winsorization">Winsorization</a> is basically a fancy term for truncation wherein Medicare sets truncation points at the 5th and 95 percentiles of all episodes, by cancer type, in their national database.<br>  
+
+<strong>Admissions</strong>  This is simply a count of the number of inpatient admissions during the episodes.  All types of inpatient hospitals are counted, including short-term acute care hospitals, long-term acute care hospitals, and inpatient rehabilitation hospitals.  The vast majority of the admissions are to short-term ACH facilities.  <br>
+
+This measure differs from the <u>% of Episodes with Admissions</u> quality measure that is shown elsewhere on this tab in that this measure counts admissions while the other measure counts episodes with admissions.  In this measure, we can count 2, 3, or more episodes in a single admission while the other measure counts only 1 episode with an admission.  Because many episodes have more than one admission, the effective admission rate (admissions/episodes) is often much higher than the percent of episodes with admissions.<br>
+
+<h3>Financial Distributions Box</h3>
+The Financial distributions box gives users access to four different charts, each showing a <a href="https://www.wikihow.com/Read-Histograms">histogram</a> of the distribution of a cost variable across episodes.  The idea behind these charts is to provide users with a better understanding of how costs vary rather than just using a simple summary statistic like the average cost that masks the variation in costs.<br>
+Each "box" contains two charts.  The chart on top is for the performance period while the chart below, which is smaller and lighter in color" is for the baseline period.  Both charts share the same x-axis so you can directly compare the distributions of cost between periods.<br>
+
+As with most charts, you can hover over each bar in the histogram to see the range of cost that the bar encapsulates and the number of episodes for that bar.<br>
+
+<h4>Actual Cost Histogram</h4>
+This chart looks at the actual costs of episodes (without applying Winsorization).  It covers the total cost of care regardless of the type of service or diagnosis associated with the claim.
+
+<h4>Winsorized Cost Histogram</h4>
+This chart looks at the <a href="#Winsorization">Winsorized</a> costs of episodes that meet the filtering criteria.  It is very much like the Actual Cost Histogram except that costs are Winsorized.  
+
+<h4>Drug Cost Histogram</h4>
+This histogram looks at total drug spend for all types of drugs, from anti-neoplastic agents to sulfonamides.  All drugs are included.  To learn more about how we identify and price drugs, see the <a href="#DrugCost">description</a> in the Terms and Methods section of this document.<br>
+
+<h4>Inpatient Cost Histogram</h4>
+This histogram looks at all Part A costs associated with inpatient hospital claims.  Basically, that means that this histgram looks at the DRG payment and outlier payments.  It includes indirect medical education (IME) and Disproportionate Share Hospital (DSH) payments.  
+
+<h3>Claims Based Quality Measures</h3>
+This section examines OCM's 3 claims-based quality measures by physician.  In the baseline period, the reports also include a chart with savings/losses per episode.  In these charts, each physician is given a specific color, shown on the bottom of the page.  The size of the circle reflects the number of episodes attributed to that physician.  Baseline period charts show a single row of results while Performance Period charts show each provider's score on the measure during the Performance Period on the top row with each provider's results in the Baseline Period on the lower row.<b>Note that these results examine OCM episodes and may, therefore, have different rates than the OCM Feedback Reports which do not examine episodes.</b>
+
+<h4>% of Patients with 3+ Days of Hospice</h4>
+This chart reflects the OCM-3 quality measure.  The denominator for the measure is the number of patients who died during their episode.  The numerator is the number of those same patients who had at least 3 days of hospice care prior to their death.  We measure days by calculating the number of days between the from and thru dates on the claim header.
+
+<h4>% of Episodes with Admissions</h4>
+This chart reflects the OCM-1 quality measure.  The denominator is all episodes.  The numerator is the number of episodes that have at least one inpatient claim.  We are not concerned with the hospital type in this calculation.  
+
+<h4>% of Episodes with ER Visits</h4>
+This chart reflects the OCM-2 quality measure.  The denominator is all episodes.  The numerator is the number of episodes that have at least one claim in the hospital outpatient file with a revenue code between 0450 and 0459.  Our method excludes the rarely used code for professional fees-emergency room (0981) as this code can be used in rural hospitals when physicians hold office hours in the ER.  Such visits are not emergency care.
+
+<h4>Savings Per Episode (Baseline Only)</h4>
+This chart is only available for the baseline data (though we may make a similar chart once reconciliation data are also available.)  Savings are defined as the difference between the Target Price - Winsorized Cost amounts as provided by CMS on the episode file.  NCH does not calculate these amounts.  The report shows the mean savings or loss over the set of episodes in the report.  
+
+<h3>Claims-Based Quality Measure Table</h3>
+This report has the same measures that we use above, but the results are shown in tabular form instead of in charts.  
+
+<h2>Quality Tab</h2>
+This tab has 2 main sections.  The upper part of the screen contains quality measures that span all episodes while the lower part of the screen has quality measures for patients who died during their episode.  Both sections have key measures followed by a pair of charts.<br>
+
+All results can use data filters in the black side panel for attributed physician and cancer type.  The Performance Period can also be filtered for the episode start date.  The Baseline Period cannot be filtered for dates currently.<br>
+
+In addition, you can use the "Y-Axis Groups" in the "Report Configuration" section of the black side panel to change what variable is used to group data along the y-axis of the charts.  By default, the reports are grouped by attributed physician, but you can also group the data by Cancer Type and other variables. 
+
+<h3>High-Level Statistics</h3>
+There are two rows of "key values".  The first row, with a green background, contains results for the Performance Period.  The second row, with the blue background, has results for the Baseline Period.
+
+<h4>% of Episodes with Admit (OCM-1)</h4>
+This value reflects the OCM-1 quality measure.  The denominator is all episodes.  The numerator is the number of episodes that have at least one inpatient claim.  We are not concerned with the hospital type in this calculation.  
+  
+<h4>% of Episodes with ER Visits</h4>
+This value reflects the OCM-2 quality measure.  The denominator is all episodes.  The numerator is the number of episodes that have at least one claim in the hospital outpatient file with a revenue code between 0450 and 0459.  Our method excludes the rarely used code for professional fees-emergency room (0981) as this code can be used in rural hospitals when physicians hold office hours in the ER.  Such visits are not emergency care.
+
+<h4>Mortality Rate</h4>
+This value is the percentage of episodes where the patient's date of death lies between the start and end dates of the episode.  The OCM data files include the date of death on all records for expired patients, but our value only counts the episodes where the date of death within the episode.
+
+<h4>ICU Days</h4>
+This measure is a count of the number of days that patients spent in the ICU during their episodes.  For details about how this is counted see this <a href="#ICU">link</a>.
+
+<h4>Quality Measure Charts</h4>
+We use the same basic charting method throughout this tab for each of the 4 horizontal bar charts.  These charts show three bars per row along the y-axis, e.g., 3 bars per physician.  The first bar shows results for the Performance Period.  This will be the darkest of the 3 bars.  The second bar shows that result compared with a <a href="#Benchmarks">case-mix adjusted benchmark</a> for that entity (provider).  The third, and lightest, bar shows the results for the same "entity" in the baseline period.<br>
+
+We have provided a list of several different measures that you can report. By default, we display the OCM-1 quality measure in the first chart and the OCM-2 quality measure in the second chart.  However, you can choose others:
+<ul>
+  <li><b>HasAdmit</b>--The percentage of episodes with admissions (OCM-1)</li>
+  <li><b>ERVisitFlag</b>--The percentage of episodes with one or more ER visits not resulting in an admission.</li>
+  <li><b>IPAdmits</b>--The average number of admissions per episode.</li>
+  <li><b>ERVisits</b>--The average number of ER visits per episode not resulting in an admission.</li>
+  <li><b>ICUStays</b>--The average number of admissions involving ICU care per episode.</li>
+  <li><b>DiedDuringEpisode</b>--Mortality rate.</li>
+</ul>
+
+<h3>High-Level Statistics for End-of-Life Care</h3>
+Again, we show some high level statistics for a particular scenario.  In this case, we focus on end-of-life care.  We show 3 quality measures for the Performance Period and the same 3 measures for the Baseline Period directly below.  The 3 measures are:
+<ul>
+  <li>the OCM-3 quality measure focusing on the percentage of expiring patients who have at least 3 days of hospice care,</li>
+  <li>the percentage of expiring patients admitted to a hospital in the last 14 days of life, and</li>
+  <li>the percentage of expiring patients who were in the ICU at any time during the last 14 days of life.</li>
+</ul> 
+
+<h3>End of Life Charts</h3>
+These charts work very much like the other quality charts on the page, but they are limited to patients who died during their episodes.  You can choose 4 measures to display in the charts:
+<ul>
+  <li><b>HospicePassOCM3</b>--The OCM-3 quality measure.</li>
+  <li><b>AdmitLast14Days</b>--The percentage of patients <i>admitted</i> during the last 14 days of life.</li>
+  <li><b>DischargesLast14Days</b>--Very similar to the measure above but looks for discharge dates in the last 14 days of life.  The result will always be greater than or equal to the admissions in the last 14 days of life</li>
+  <li><b>ICULast14Days</b>--The percentage of expiring patients who were in the ICU at any time during the last 14 days of life.</li>
+</ul>
+    
+<h1>Terms and Methods</h1>
+<h3 id="Attribution">Physician Attribution</h3>New Century Health assigns an "attributed physician" to each episode using logic based on the methods CMMI uses to assign episodes to practices.  The method focuses on identifying the physician (NPI) in the practice who has the most E&M services during a given episode.  We use only the Part B non-facility data for this purpose (excluding hospital outpatient and DME claims).<br>
+To do that, we first find the Tax ID that bills for the most services in your data.  We typically find that a single Tax ID accounts for 70-80% of all codes with the rest scattered among many different providers. <br> 
+We then filter the Part B data described above to find the physician in that Tax ID who has a plurality of the E&M services (defined as CPT codes 99201-99499) during each episode.  In the event that two or more providers have the same number of E&M services, we break ties by first finding who was paid the most for E&M services.  If two or more physicians remain tied, we then select the physician who billed with the earliest date of service.<br>
+
+<h3 id="Benchmarks">Case-Mix Adjusted Benchmarking</h3>
+<a href="https://www.psychoutcomes.org/OutcomesMeasurement/CaseMixAdjustment">acorn</a> defines case mix adjustment as "the use of statistical procedures to permit comparison of treatment outcomes between providers with differing mix of patients with regard to diagnoses, severity of illness, and other variables associated with the probability of improvement with treatment."  While case-mix has become synonymous with DRG-based statistics and pricing, the underlying concept and methodology is used in many other areas.  Indeed, the OCM Pricing Model can be viewed as a form of case-mix adjustment<br>
+
+In many reports, NCH uses "benchmarks" which are case-mix adjusted rates or costs associated for a given provider.  Our method is quite simple.  We calculate the average (mean) rate or cost by cancer type <i>within your dataset</i>.  We then assign that rate or cost to each episode for the provider.  
+
+For instance, we might compute admissions per episode benchmarks.  To do that, we would calculate mean number of admissions per episode by cancer type.  The result would be a table that looks like the one below.
+<center><table>
+<tr>
+	<th>Cancer Type</th>
+	<th>Admits Per Episode</th>
+</tr>
+<tr>
+	<td>Acute Leukemia</td>
+	<td><center>0.75</td>
+</tr>
+<tr>
+	<td>Anal Cancer</td>
+	<td><center>0.42</td>
+</tr>
+<tr>
+	<td>Bladder Cancer</td>
+	<td><center>0.28</td>
+</tr>
+<tr>
+	<td>Breast Cancer</td>
+	<td><center>0.19</td>
+</tr>
+<tr>
+	<td>...</td>
+	<td><center>...</td>
+</tr>
+<tr>
+	<td>Lung Cancer</td>
+	<td><center>0.49</td>
+</tr>
+</table></center>
+Now, let's consider a simple provider with only 5 episodes (for purposes of illustration).  The benchmark # of admissions simply copies values from the table above.
+<center><table>
+<tr>
+<th>Cancer Type</th>
+<th>Benchmark # of Admissions</th>
+</tr>
+<tr>
+<td>Breast Cancer</td>
+<td><center>0.19</td>
+</tr>
+<tr>
+<td>Breast Cancer</td>
+<td><center>0.19</td>
+</tr>
+<tr>
+<td>Breast Cancer</td>
+<td><center>0.19</td>
+</tr>
+<tr>
+<td>Lung Cancer</td>
+<td><center>0.49</td>
+</tr>
+<tr>
+<td>Lung Cancer</td>
+<td><center>0.49</td>
+</tr>
+</table></center> 
+If we add up the benchmark # of admissions and divide by the number of episodes, we get 1.55/5 or 0.31.  That value, 0.31, would be the benchmark for the provider.<br>
+In practice, New Century Health computes benchmarks for over 20 different measures using this same methodology.  
+
+<h3 id="Winsorization">Winsorization</h3>
+Medicare sets both upper and lower thresholds for the cost of episodes by cancer type.  They derive the Winsorization points from a national database of cancer episodes that includes both OCM participants and non-participating practices.  The method works by cancer type.  For each cancer type, Medicare's contractor identifies the 5th and 95th percentile costs among all of the episodes in the national database.  Episodes in your data whose costs exceed the 95th percentile are given a Winsorized cost equal to the 95th percentile.  Episodes whose costs are below the 5th percentile are given a Winsorized cost equal to the 5th percentile.  (These are often patients who died early in their episodes.)<br>
+Medicare makes no adjustments within cancer types for any other factor that is used in the pricing model.  Of particular note, Medicare uses the same Winsorization points for:
+<li>episodes with and without surgical procedures</li> 
+<ul>breast cancer episodes regardless of whether they included Part B drug claims</ul>
+<ul>prostate cancer episodes that are castration-sensitive and not castration-sensitive</ul>
+<ul>"low risk" and "high risk" bladder cancer episodes</ul>
+It is also worth noting Winsorization's impact on episodes with bone marrow transplants.  Winsorization is almost always applied to episodes with BMT.  Many practices worry that the pricing model only doubles the target price of episodes with BMT, but in practice, many episodes with BMT are priced <i>above the Winsorization threshold.</i>
+
+<h3 id="DrugCost">Identifying Drug Costs</h3>
+Pharmaceuticals appear in 4 different claim files in the Medicare OCM data.  "Part B" drugs appear primarily in the "physician" and "outpatient" files.  However, some drug claims also appear in the DME file.  Part D "oral" drugs appear in their own file.  All claims in the Part D file are considered to be drugs, but only some claims in the other file are classified as drugs.<br>
+We use the same method to identify drug claims in both the "physician" and hospital outpatient files.  Essentially, we rely on Medicare's Berenson-Eggers Type of Service Classification (<a href="https://www.cms.gov/Research-Statistics-Data-and-Systems/Statistics-Trends-and-Reports/MedicareFeeforSvcPartsAB/downloads/betosdesccodes.pdf">BETOS</a>) system.  HCPCS codes that map to BETOS categories <b>O1D</b> and <b>O1E</b> are consider to be drug claims.  We then use the paid amounts on those claims.<br>  
+For DME claims, we consider any claim line with a non-null NDC (National Drug Code) to be a drug claim.  Most of the claims have a service code starting with <b>W0</b>.  Again, we use the paid amount shown on the claim line for the cost of the drugs.   
+We consider all Part D "event" file claims to be drug claims.  For some analyses, we split the drugs into two groups, cancer drugs and non-cancer drugs.  Only drugs with a Generic Product Indicator (GPI) code mapping to the "Anti-neoplastic agents" therapeutic class are considered cancer drugs.<br>
+Also, under OCM rules, only part of the paid amount for these claims counts against the total episode cost.  By rule, OCM does not include any amounts paid by patients or by Part D insurance plans as part of the cost of episodes.  OCM only counts 100% of the low income subsidy "<a href="https://www.medicare.gov/your-medicare-costs/help-paying-costs/save-on-drug-costs/save-on-drug-costs.html">Extra Help</a>" program and 80% of the cost above the catastrophic threshold against OCM costs.  To learn more about how Medicare covers outpatient (oral) drugs, we suggest reviewing this <a href="https://www.kff.org/medicare/fact-sheet/the-medicare-prescription-drug-benefit-fact-sheet/">fact sheet</a> from the Kaiser Family Foundation.
+
+<h3 id="ICU">ICU Days and Stays</h3>
+We identify inpatient stays that include ICU bed days by looking for revenue center codes 0200-0204.  We count days by summing the units field for those revenue code lines.
+</body>
+</html>
